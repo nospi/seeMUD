@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import './App.css';
+import { AnsiText } from './ansi.jsx';
 import {
     ConnectToMUD,
     DisconnectFromMUD,
@@ -119,38 +120,34 @@ function App() {
         }
     };
 
-    // Parse output for basic formatting
+    // Parse output for basic formatting with ANSI support
     const formatLine = (line) => {
-        // Strip all ANSI escape sequences
-        let cleaned = line
-            // Remove color codes
-            .replace(/\x1b\[[0-9;]*m/g, '')
-            // Remove cursor positioning and other ANSI sequences
-            .replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '')
-            // Remove cursor save/restore
-            .replace(/\x1b[78]/g, '')
-            // Remove screen clear
-            .replace(/\x1b\[2J/g, '')
-            // Remove any remaining escape characters
-            .replace(/\x1b/g, '');
-
-        // Skip empty lines after cleaning
-        if (!cleaned.trim()) {
+        // Skip completely empty lines
+        if (!line.trim()) {
             return '';
         }
 
-        // Detect different content types
+        // Get clean text for content type detection
+        const cleaned = line
+            .replace(/\x1b\[[0-9;]*m/g, '')
+            .replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '')
+            .replace(/\x1b[78]/g, '')
+            .replace(/\x1b\[2J/g, '')
+            .replace(/\x1b/g, '');
+
+        // Detect different content types and wrap with appropriate classes
         if (cleaned.startsWith('>')) {
-            return <span className="command-echo">{cleaned}</span>;
+            return <span className="command-echo"><AnsiText>{line}</AnsiText></span>;
         } else if (cleaned.includes('Exits:')) {
-            return <span className="exits">{cleaned}</span>;
+            return <span className="exits"><AnsiText>{line}</AnsiText></span>;
         } else if (cleaned.startsWith('🎮') || cleaned.startsWith('👋')) {
-            return <span className="system">{cleaned}</span>;
+            return <span className="system"><AnsiText>{line}</AnsiText></span>;
         } else if (cleaned.startsWith('❌')) {
-            return <span className="error">{cleaned}</span>;
+            return <span className="error"><AnsiText>{line}</AnsiText></span>;
         }
 
-        return cleaned;
+        // Default: render with ANSI support
+        return <AnsiText>{line}</AnsiText>;
     };
 
     return (

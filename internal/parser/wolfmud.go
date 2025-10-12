@@ -60,8 +60,12 @@ func (p *WolfMUDParser) ParseLine(line string) *ParsedOutput {
 		Type:    TypeUnknown,
 	}
 
-	// Remove color codes for processing
-	cleaned := p.stripColorCodes(line)
+	// Remove control codes but preserve colors for display
+	withColors := p.stripControlCodes(line)
+	output.Content = withColors
+
+	// Remove all codes for text analysis
+	cleaned := p.stripColorCodes(withColors)
 	output.CleanText = cleaned
 
 	// Skip empty lines
@@ -138,29 +142,29 @@ func (p *WolfMUDParser) ParseMultipleLines(lines []string) []*ParsedOutput {
 	return results
 }
 
-// stripColorCodes removes ANSI escape sequences from text
-func (p *WolfMUDParser) stripColorCodes(text string) string {
-	// Remove color codes
-	cleaned := p.colorCodeRegex.ReplaceAllString(text, "")
-
-	// Remove other common ANSI escape sequences
-	// ESC[ followed by any number of digits, semicolons, and letters
-	ansiRegex := regexp.MustCompile(`\x1b\[[0-9;]*[a-zA-Z]`)
-	cleaned = ansiRegex.ReplaceAllString(cleaned, "")
-
+// stripControlCodes removes ANSI control sequences but preserves color codes
+func (p *WolfMUDParser) stripControlCodes(text string) string {
 	// Remove cursor position sequences like ESC[255;255H
-	cursorRegex := regexp.MustCompile(`\x1b\[[0-9]+;[0-9]+[HfABCDEFGJKST]`)
-	cleaned = cursorRegex.ReplaceAllString(cleaned, "")
+	cleaned := regexp.MustCompile(`\x1b\[[0-9]+;[0-9]+[HfABCDEFGJKST]`).ReplaceAllString(text, "")
+
+	// Remove cursor movement sequences
+	cleaned = regexp.MustCompile(`\x1b\[[ABCD]`).ReplaceAllString(cleaned, "")
 
 	// Remove other escape sequences (ESC followed by single character)
-	escRegex := regexp.MustCompile(`\x1b[78]`)
-	cleaned = escRegex.ReplaceAllString(cleaned, "")
+	cleaned = regexp.MustCompile(`\x1b[78]`).ReplaceAllString(cleaned, "")
 
 	// Remove screen clear sequences
-	clearRegex := regexp.MustCompile(`\x1b\[2J`)
-	cleaned = clearRegex.ReplaceAllString(cleaned, "")
+	cleaned = regexp.MustCompile(`\x1b\[2J`).ReplaceAllString(cleaned, "")
+
+	// Remove other control sequences but keep color codes (ESC[...m)
+	cleaned = regexp.MustCompile(`\x1b\[[0-9]*[JK]`).ReplaceAllString(cleaned, "")
 
 	return cleaned
+}
+
+// stripColorCodes removes ANSI color codes for clean text processing
+func (p *WolfMUDParser) stripColorCodes(text string) string {
+	return p.colorCodeRegex.ReplaceAllString(text, "")
 }
 
 // parseExits parses the exits string into a slice

@@ -229,3 +229,19 @@ body {
 ::-webkit-scrollbar-thumb:hover {
     background: #444;
 }
+
+/* ANSI Text Support */
+.ansi-container {
+    display: inline;
+}
+
+.ansi-text {
+    display: inline;
+    font-family: inherit;
+    white-space: pre-wrap;
+}
+
+/* Make sure ANSI colors work well with our theme */
+.output-line .ansi-text {
+    line-height: inherit;
+}
