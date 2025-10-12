@@ -117,6 +117,18 @@ func (c *Client) readLoop() {
 		c.mutex.Unlock()
 	}()
 
+	// Send terminal type negotiation response immediately after connection
+	// This tells WolfMUD we're a VT100 terminal with 80x25 size
+	go func() {
+		time.Sleep(100 * time.Millisecond)
+		if c.writer != nil {
+			// Send a newline to accept defaults and get past terminal negotiation
+			c.writer.WriteString("\n")
+			c.writer.Flush()
+		}
+	}()
+
+	buffer := make([]byte, 4096)
 	for {
 		select {
 		case <-c.closeChan:
@@ -124,7 +136,7 @@ func (c *Client) readLoop() {
 		default:
 			if c.conn != nil {
 				c.conn.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
-				line, err := c.reader.ReadString('\n')
+				n, err := c.conn.Read(buffer)
 				if err != nil {
 					if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
 						continue
@@ -133,13 +145,20 @@ func (c *Client) readLoop() {
 					return
 				}
 
-				// Clean up the line and send to output channel
-				line = strings.TrimRight(line, "\r\n")
-				if line != "" {
-					select {
-					case c.outputChan <- line:
-					default:
-						// Output buffer full, skip this line
+				if n > 0 {
+					// Process the received data
+					data := string(buffer[:n])
+
+					// Split by newlines and send each line
+					lines := strings.Split(data, "\n")
+					for _, line := range lines {
+						line = strings.TrimRight(line, "\r")
+						// Send even empty lines to preserve formatting
+						select {
+						case c.outputChan <- line:
+						default:
+							// Output buffer full, skip this line
+						}
 					}
 				}
 			}

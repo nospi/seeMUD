@@ -18,7 +18,7 @@ func main() {
 
 	// Create telnet client
 	client := telnet.NewClient("localhost", "4001")
-	parser := parser.NewWolfMUDParser()
+	mudParser := parser.NewWolfMUDParser()
 
 	// Connect
 	err := client.Connect()
@@ -34,7 +34,7 @@ func main() {
 		outputChan := client.GetOutput()
 		for line := range outputChan {
 			// Parse the line
-			parsed := parser.ParseLine(line)
+			parsed := mudParser.ParseLine(line)
 
 			// Color-code output based on type
 			switch parsed.Type {
