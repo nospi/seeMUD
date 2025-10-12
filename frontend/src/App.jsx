@@ -51,43 +51,6 @@ function App() {
     const handleConnect = async () => {
         setConnecting(true);
         try {
-            // Debug: Check if Go backend is available
-            console.log("window.go:", window.go);
-            console.log("window.go?.main:", window.go?.main);
-            console.log("ConnectToMUD function:", ConnectToMUD);
-
-            if (!window.go || !window.go.main) {
-                // Mock mode for browser testing
-                setOutput(prev => [...prev,
-                    "🌐 Browser mode detected - Go backend not available",
-                    "🎭 Enabling mock MUD for UI testing...",
-                    "",
-                    "🎮 Mock connection to WolfMUD established!",
-                    "",
-                    "Welcome to WolfMUD!",
-                    "World Of Living Fantasy",
-                    "",
-                    "Enter your account ID or just press enter to create a new account:",
-                    ""
-                ]);
-                setConnected(true);
-
-                // Start mock output simulation
-                setTimeout(() => {
-                    setOutput(prev => [...prev,
-                        "Account created! Welcome, brave adventurer!",
-                        "",
-                        "🏠 Fireplace",
-                        "You are in the corner of the common room in the dragon's breath tavern.",
-                        "A fire burns merrily in an ornate fireplace, giving comfort to weary travellers.",
-                        "🚪 Exits: east, south",
-                        ""
-                    ]);
-                }, 2000);
-
-                return;
-            }
-
             await ConnectToMUD("localhost", "4001");
             setConnected(true);
             setOutput(prev => [...prev, "🎮 Connected to WolfMUD!", ""]);
@@ -111,67 +74,25 @@ function App() {
 
     const handleSendCommand = async (e) => {
         e.preventDefault();
-        if (!inputValue.trim() || !connected) return;
+        if (!connected) return;
 
-        const command = inputValue.trim();
+        const command = inputValue; // Don't trim here to preserve empty commands
 
-        // Add to output display
-        setOutput(prev => [...prev, `> ${command}`]);
+        // Add to output display (show what was actually sent)
+        const displayCommand = command || "(enter)";
+        setOutput(prev => [...prev, `> ${displayCommand}`]);
 
-        // Add to history
-        setCommandHistory(prev => [...prev, command]);
+        // Add to history (only non-empty commands)
+        if (command.trim()) {
+            setCommandHistory(prev => [...prev, command.trim()]);
+        }
         setHistoryIndex(-1);
 
-        // Handle command
-        if (!window.go || !window.go.main) {
-            // Mock mode responses
-            setTimeout(() => {
-                switch (command.toLowerCase()) {
-                    case 'look':
-                        setOutput(prev => [...prev,
-                            "",
-                            "🏠 Fireplace",
-                            "You are in the corner of the common room in the dragon's breath tavern.",
-                            "A fire burns merrily in an ornate fireplace, giving comfort to weary travellers.",
-                            "The fire causes shadows to flicker and dance around the room.",
-                            "",
-                            "📦 A wooden chair sits near the fireplace",
-                            "📦 An ornate goblet gleams on the mantelpiece",
-                            "",
-                            "🚪 Exits: east, south",
-                            ""
-                        ]);
-                        break;
-                    case 'east':
-                        setOutput(prev => [...prev,
-                            "",
-                            "🏠 Tavern Entrance",
-                            "You stand at the entrance to the dragon's breath tavern.",
-                            "🚪 Exits: west, north, out",
-                            ""
-                        ]);
-                        break;
-                    case 'help':
-                        setOutput(prev => [...prev,
-                            "",
-                            "Available commands:",
-                            "look - Look around",
-                            "north, south, east, west - Move in directions",
-                            "inventory - Check your items",
-                            ""
-                        ]);
-                        break;
-                    default:
-                        setOutput(prev => [...prev, `You typed: ${command}`, ""]);
-                }
-            }, 200);
-        } else {
-            // Real MUD connection
-            try {
-                await SendCommand(command);
-            } catch (err) {
-                setOutput(prev => [...prev, `❌ Error: ${err}`]);
-            }
+        // Send to MUD
+        try {
+            await SendCommand(command);
+        } catch (err) {
+            setOutput(prev => [...prev, `❌ Error: ${err}`]);
         }
 
         setInputValue('');
@@ -200,8 +121,23 @@ function App() {
 
     // Parse output for basic formatting
     const formatLine = (line) => {
-        // Strip ANSI codes for now
-        const cleaned = line.replace(/\x1b\[[0-9;]*m/g, '');
+        // Strip all ANSI escape sequences
+        let cleaned = line
+            // Remove color codes
+            .replace(/\x1b\[[0-9;]*m/g, '')
+            // Remove cursor positioning and other ANSI sequences
+            .replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '')
+            // Remove cursor save/restore
+            .replace(/\x1b[78]/g, '')
+            // Remove screen clear
+            .replace(/\x1b\[2J/g, '')
+            // Remove any remaining escape characters
+            .replace(/\x1b/g, '');
+
+        // Skip empty lines after cleaning
+        if (!cleaned.trim()) {
+            return '';
+        }
 
         // Detect different content types
         if (cleaned.startsWith('>')) {

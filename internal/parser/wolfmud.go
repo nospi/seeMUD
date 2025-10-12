@@ -138,9 +138,29 @@ func (p *WolfMUDParser) ParseMultipleLines(lines []string) []*ParsedOutput {
 	return results
 }
 
-// stripColorCodes removes ANSI color codes from text
+// stripColorCodes removes ANSI escape sequences from text
 func (p *WolfMUDParser) stripColorCodes(text string) string {
-	return p.colorCodeRegex.ReplaceAllString(text, "")
+	// Remove color codes
+	cleaned := p.colorCodeRegex.ReplaceAllString(text, "")
+
+	// Remove other common ANSI escape sequences
+	// ESC[ followed by any number of digits, semicolons, and letters
+	ansiRegex := regexp.MustCompile(`\x1b\[[0-9;]*[a-zA-Z]`)
+	cleaned = ansiRegex.ReplaceAllString(cleaned, "")
+
+	// Remove cursor position sequences like ESC[255;255H
+	cursorRegex := regexp.MustCompile(`\x1b\[[0-9]+;[0-9]+[HfABCDEFGJKST]`)
+	cleaned = cursorRegex.ReplaceAllString(cleaned, "")
+
+	// Remove other escape sequences (ESC followed by single character)
+	escRegex := regexp.MustCompile(`\x1b[78]`)
+	cleaned = escRegex.ReplaceAllString(cleaned, "")
+
+	// Remove screen clear sequences
+	clearRegex := regexp.MustCompile(`\x1b\[2J`)
+	cleaned = clearRegex.ReplaceAllString(cleaned, "")
+
+	return cleaned
 }
 
 // parseExits parses the exits string into a slice

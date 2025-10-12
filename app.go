@@ -73,14 +73,20 @@ func (a *App) SendCommand(command string) error {
 	return a.mudClient.SendCommand(command)
 }
 
-// GetOutput returns the current output buffer
+// GetOutput returns new output since last call and clears the buffer
 func (a *App) GetOutput() []string {
-	a.outputMux.RLock()
-	defer a.outputMux.RUnlock()
+	a.outputMux.Lock()
+	defer a.outputMux.Unlock()
 
-	// Return a copy of the buffer
+	if len(a.outputBuf) == 0 {
+		return []string{}
+	}
+
+	// Return current buffer and clear it
 	result := make([]string, len(a.outputBuf))
 	copy(result, a.outputBuf)
+	a.outputBuf = a.outputBuf[:0] // Clear the buffer
+
 	return result
 }
 

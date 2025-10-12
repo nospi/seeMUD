@@ -100,12 +100,14 @@ body {
     font-family: 'Consolas', 'Monaco', monospace;
     font-size: 14px;
     line-height: 1.6;
+    text-align: left;
 }
 
 .output-line {
     margin-bottom: 0.2rem;
     white-space: pre-wrap;
     word-wrap: break-word;
+    text-align: left;
 }
 
 .command-echo {
@@ -206,7 +208,7 @@ body {
 .help-text {
     color: #888;
     font-size: 0.9rem;
-    text-align: center;
+    text-align: left;
 }
 
 /* Scrollbar styling */
