@@ -47,7 +47,7 @@ type ParsedOutput struct {
 func NewWolfMUDParser() *WolfMUDParser {
 	return &WolfMUDParser{
 		promptRegex:    regexp.MustCompile(`^[\[<].*[\]>]\s*$`),
-		exitRegex:      regexp.MustCompile(`^Exits?:\s*(.+)$`),
+		exitRegex:      regexp.MustCompile(`^(?:You see )?[Ee]xits?:\s*(.+)$`),
 		inventoryRegex: regexp.MustCompile(`^(A|An|The)\s+.*\s+(is|are|sits?|lies?|stands?|rests?)\s+.*\.$`),
 		colorCodeRegex: regexp.MustCompile(`\x1b\[[0-9;]*m`),
 	}
@@ -73,8 +73,22 @@ func (p *WolfMUDParser) ParseLine(line string) *ParsedOutput {
 		return output
 	}
 
-	// Check for prompt
-	if p.promptRegex.MatchString(cleaned) {
+	// Check if this looks like a room title first (bracketed titles like [South bridge])
+	if p.isRoomTitle(cleaned) {
+		output.Type = TypeRoomTitle
+		output.Content = cleaned
+		// Extract room name from brackets if present
+		if strings.HasPrefix(cleaned, "[") && strings.HasSuffix(cleaned, "]") {
+			output.RoomName = cleaned[1 : len(cleaned)-1]
+		} else {
+			output.RoomName = cleaned
+		}
+		output.IsRoomEntry = true
+		return output
+	}
+
+	// Check for prompt (but exclude room titles)
+	if p.promptRegex.MatchString(cleaned) && !strings.Contains(cleaned, "[") {
 		output.Type = TypePrompt
 		output.Content = cleaned
 		return output
@@ -93,15 +107,6 @@ func (p *WolfMUDParser) ParseLine(line string) *ParsedOutput {
 		output.Type = TypeInventory
 		output.Content = cleaned
 		output.Items = []string{p.extractItemName(cleaned)}
-		return output
-	}
-
-	// Check if this looks like a room title (usually short, no punctuation at end)
-	if p.isRoomTitle(cleaned) {
-		output.Type = TypeRoomTitle
-		output.Content = cleaned
-		output.RoomName = cleaned
-		output.IsRoomEntry = true
 		return output
 	}
 
@@ -223,16 +228,27 @@ func (p *WolfMUDParser) extractItemName(line string) string {
 
 // isRoomTitle checks if a line looks like a room title
 func (p *WolfMUDParser) isRoomTitle(line string) bool {
+	line = strings.TrimSpace(line)
+	if line == "" {
+		return false
+	}
+
+	// WolfMUD room titles are typically enclosed in brackets: [Room Name]
+	if strings.HasPrefix(line, "[") && strings.HasSuffix(line, "]") && len(line) > 2 {
+		// Extract content between brackets
+		content := line[1 : len(line)-1]
+		// Should be reasonably short and not contain multiple sentences
+		if len(content) > 0 && len(content) < 80 && !strings.Contains(content, ". ") {
+			return true
+		}
+	}
+
+	// Fallback: general room title detection
 	// Room titles are typically:
 	// - Short (< 50 chars)
 	// - Don't end with punctuation (except maybe :)
 	// - Often title case
 	if len(line) > 50 {
-		return false
-	}
-
-	line = strings.TrimSpace(line)
-	if line == "" {
 		return false
 	}
 
@@ -244,6 +260,11 @@ func (p *WolfMUDParser) isRoomTitle(line string) bool {
 
 	// Check if it has multiple sentences (likely description)
 	if strings.Contains(line, ". ") {
+		return false
+	}
+
+	// Avoid detecting exits as room titles
+	if strings.Contains(strings.ToLower(line), "exit") {
 		return false
 	}
 

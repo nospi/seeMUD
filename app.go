@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"log"
 	"sync"
+	"time"
 
 	"see-mud-gui/internal/parser"
+	"see-mud-gui/internal/renderer"
 	"see-mud-gui/internal/telnet"
 )
 
@@ -15,15 +17,19 @@ type App struct {
 	ctx        context.Context
 	mudClient  *telnet.Client
 	mudParser  *parser.WolfMUDParser
+	sdClient   *renderer.StableDiffusionClient
 	outputBuf  []string
 	outputMux  sync.RWMutex
 	connected  bool
+	currentRoom *parser.ParsedOutput
+	roomMux     sync.RWMutex
 }
 
 // NewApp creates a new App application struct
 func NewApp() *App {
 	return &App{
 		mudParser: parser.NewWolfMUDParser(),
+		sdClient:  renderer.NewStableDiffusionClient("http://127.0.0.1:7860"),
 		outputBuf: make([]string, 0, 1000), // Buffer last 1000 lines
 	}
 }
@@ -128,13 +134,91 @@ func (a *App) processOutput() {
 			// Log parsed content for debugging
 			log.Printf("Parsed: Type=%d, Content=%s", parsed.Type, parsed.CleanText)
 
-			// TODO: Here we'll add image generation triggers
-			if parsed.Type == parser.TypeRoomTitle || parsed.Type == parser.TypeRoomDescription {
-				log.Printf("Room content detected: %s", parsed.Content)
-				// Future: trigger image generation
+			// Trigger image generation for room content
+			if parsed.Type == parser.TypeRoomTitle {
+				a.roomMux.Lock()
+				a.currentRoom = parsed
+				a.roomMux.Unlock()
+				log.Printf("Room title detected: %s", parsed.Content)
+			} else if parsed.Type == parser.TypeRoomDescription && a.currentRoom != nil {
+				a.roomMux.Lock()
+				if a.currentRoom != nil {
+					// Combine room title and description for image generation
+					a.currentRoom.Content += " " + parsed.Content
+					log.Printf("Room description added: %s", parsed.Content)
+				}
+				a.roomMux.Unlock()
 			}
 		}
 	}
+}
+
+// GenerateRoomImage generates an image for the current room
+func (a *App) GenerateRoomImage() (string, error) {
+	a.roomMux.RLock()
+	currentRoom := a.currentRoom
+	a.roomMux.RUnlock()
+
+	if currentRoom == nil {
+		return "", fmt.Errorf("no room data available")
+	}
+
+	// Check if SD is available
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if err := a.sdClient.CheckHealth(ctx); err != nil {
+		return "", fmt.Errorf("Stable Diffusion not available: %w", err)
+	}
+
+	// Generate image
+	prompt := renderer.RoomImagePrompt(currentRoom.RoomName, currentRoom.Content)
+	req := &renderer.Txt2ImgRequest{
+		Prompt:         prompt,
+		NegativePrompt: renderer.GetNegativePrompt(),
+		Width:          512,
+		Height:         512,
+		Steps:          20,
+		CFGScale:       7.0,
+	}
+
+	ctx, cancel = context.WithTimeout(context.Background(), 120*time.Second)
+	defer cancel()
+
+	resp, err := a.sdClient.GenerateImage(ctx, req)
+	if err != nil {
+		return "", fmt.Errorf("failed to generate image: %w", err)
+	}
+
+	if len(resp.Images) == 0 {
+		return "", fmt.Errorf("no images generated")
+	}
+
+	// Return base64 encoded image
+	return resp.Images[0], nil
+}
+
+// GetCurrentRoom returns the current room information
+func (a *App) GetCurrentRoom() map[string]string {
+	a.roomMux.RLock()
+	defer a.roomMux.RUnlock()
+
+	if a.currentRoom == nil {
+		return map[string]string{}
+	}
+
+	return map[string]string{
+		"name":        a.currentRoom.RoomName,
+		"description": a.currentRoom.Content,
+	}
+}
+
+// CheckSDStatus checks if Stable Diffusion is available
+func (a *App) CheckSDStatus() bool {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	return a.sdClient.CheckHealth(ctx) == nil
 }
 
 // Greet returns a greeting for the given name (keeping for now)

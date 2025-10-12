@@ -6,7 +6,10 @@ import {
     DisconnectFromMUD,
     SendCommand,
     GetOutput,
-    GetConnectionStatus
+    GetConnectionStatus,
+    GenerateRoomImage,
+    GetCurrentRoom,
+    CheckSDStatus
 } from "../wailsjs/go/main/App";
 
 function App() {
@@ -16,6 +19,10 @@ function App() {
     const [inputValue, setInputValue] = useState('');
     const [commandHistory, setCommandHistory] = useState([]);
     const [historyIndex, setHistoryIndex] = useState(-1);
+    const [currentRoom, setCurrentRoom] = useState({});
+    const [roomImage, setRoomImage] = useState(null);
+    const [generatingImage, setGeneratingImage] = useState(false);
+    const [sdAvailable, setSdAvailable] = useState(false);
 
     const outputEndRef = useRef(null);
     const inputRef = useRef(null);
@@ -40,6 +47,12 @@ function App() {
                 if (lines && lines.length > 0) {
                     setOutput(prev => [...prev, ...lines]);
                 }
+
+                // Check for room updates
+                const room = await GetCurrentRoom();
+                if (room && (room.name || room.description)) {
+                    setCurrentRoom(room);
+                }
             } catch (err) {
                 console.error("Error getting output:", err);
             }
@@ -48,6 +61,22 @@ function App() {
         const interval = setInterval(pollOutput, 100);
         return () => clearInterval(interval);
     }, [connected]);
+
+    // Check SD status periodically
+    useEffect(() => {
+        const checkSD = async () => {
+            try {
+                const available = await CheckSDStatus();
+                setSdAvailable(available);
+            } catch (err) {
+                setSdAvailable(false);
+            }
+        };
+
+        checkSD();
+        const interval = setInterval(checkSD, 10000); // Check every 10 seconds
+        return () => clearInterval(interval);
+    }, []);
 
     const handleConnect = async () => {
         setConnecting(true);
@@ -117,6 +146,21 @@ function App() {
                 setHistoryIndex(-1);
                 setInputValue('');
             }
+        }
+    };
+
+    const handleGenerateImage = async () => {
+        if (!sdAvailable || !currentRoom.name || generatingImage) return;
+
+        setGeneratingImage(true);
+        try {
+            const imageBase64 = await GenerateRoomImage();
+            setRoomImage(`data:image/png;base64,${imageBase64}`);
+        } catch (err) {
+            console.error("Image generation failed:", err);
+            setOutput(prev => [...prev, `❌ Image generation failed: ${err.message || err}`]);
+        } finally {
+            setGeneratingImage(false);
         }
     };
 
@@ -203,8 +247,39 @@ function App() {
                 <div className="sidebar">
                     <div className="panel">
                         <h3>🏠 Room View</h3>
-                        <div className="image-placeholder">
-                            <p>Image generation will appear here</p>
+                        <div className="room-info">
+                            {currentRoom.name && (
+                                <div className="room-name">
+                                    <strong>{currentRoom.name}</strong>
+                                </div>
+                            )}
+                            <div className="image-container">
+                                {roomImage ? (
+                                    <img
+                                        src={roomImage}
+                                        alt="Generated room view"
+                                        className="room-image"
+                                    />
+                                ) : (
+                                    <div className="image-placeholder">
+                                        <p>{currentRoom.name ? 'Ready to generate image' : 'Explore a room to generate images'}</p>
+                                    </div>
+                                )}
+                            </div>
+                            <div className="image-controls">
+                                <button
+                                    onClick={handleGenerateImage}
+                                    disabled={!sdAvailable || !currentRoom.name || generatingImage}
+                                    className="btn-generate"
+                                >
+                                    {generatingImage ? '🎨 Generating...' : '🎨 Generate Image'}
+                                </button>
+                                <div className="sd-status">
+                                    SD: <span className={sdAvailable ? 'status-ok' : 'status-error'}>
+                                        {sdAvailable ? '✅ Ready' : '❌ Not Available'}
+                                    </span>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
