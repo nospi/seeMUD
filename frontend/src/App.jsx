@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import './App.css';
 import { AnsiText } from './ansi.jsx';
+import Map from './Map.jsx';
 import {
     ConnectToMUD,
     DisconnectFromMUD,
@@ -29,8 +30,10 @@ function App() {
     const [sdAvailable, setSdAvailable] = useState(false);
     const [imagePanelWidth, setImagePanelWidth] = useState(600); // Default to 600px
     const [entitiesPanelWidth, setEntitiesPanelWidth] = useState(300); // Default to 300px
+    const [mapPanelWidth, setMapPanelWidth] = useState(400); // Default to 400px
     const [isResizingImage, setIsResizingImage] = useState(false);
     const [isResizingEntities, setIsResizingEntities] = useState(false);
+    const [isResizingMap, setIsResizingMap] = useState(false);
     const [showPromptInput, setShowPromptInput] = useState(false);
     const [customPrompt, setCustomPrompt] = useState('');
     const [entities, setEntities] = useState({ items: [], mobs: [] });
@@ -54,7 +57,7 @@ function App() {
         const handleMouseMove = (e) => {
             if (!isResizingImage) return;
 
-            const newWidth = window.innerWidth - e.clientX - entitiesPanelWidth - 8; // Subtract entities panel and resize handle
+            const newWidth = window.innerWidth - e.clientX - entitiesPanelWidth - mapPanelWidth - 16; // Subtract right panels and resize handles
             // Constrain between 300px and 50% of window width
             const minWidth = 300;
             const maxWidth = window.innerWidth * 0.5;
@@ -78,7 +81,7 @@ function App() {
             document.body.style.cursor = '';
             document.body.style.userSelect = '';
         };
-    }, [isResizingImage, entitiesPanelWidth]);
+    }, [isResizingImage, entitiesPanelWidth, mapPanelWidth]);
 
     // Handle mouse move for resizing entities panel
     useEffect(() => {
@@ -110,6 +113,37 @@ function App() {
             document.body.style.userSelect = '';
         };
     }, [isResizingEntities]);
+
+    // Handle mouse move for resizing map panel
+    useEffect(() => {
+        const handleMouseMove = (e) => {
+            if (!isResizingMap) return;
+
+            const newWidth = window.innerWidth - e.clientX;
+            // Constrain between 300px and 700px
+            const minWidth = 300;
+            const maxWidth = 700;
+            setMapPanelWidth(Math.min(Math.max(newWidth, minWidth), maxWidth));
+        };
+
+        const handleMouseUp = () => {
+            setIsResizingMap(false);
+        };
+
+        if (isResizingMap) {
+            document.addEventListener('mousemove', handleMouseMove);
+            document.addEventListener('mouseup', handleMouseUp);
+            document.body.style.cursor = 'col-resize';
+            document.body.style.userSelect = 'none';
+        }
+
+        return () => {
+            document.removeEventListener('mousemove', handleMouseMove);
+            document.removeEventListener('mouseup', handleMouseUp);
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
+        };
+    }, [isResizingMap]);
 
     // Poll for output when connected
     useEffect(() => {
@@ -564,6 +598,15 @@ function App() {
                             <p className="no-entities">No items or mobs detected</p>
                         )}
                     </div>
+                </div>
+
+                <div
+                    className="resize-handle"
+                    onMouseDown={() => setIsResizingMap(true)}
+                />
+
+                <div style={{ width: `${mapPanelWidth}px`, flexShrink: 0 }}>
+                    <Map connected={connected} />
                 </div>
             </div>
 

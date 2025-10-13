@@ -30,6 +30,14 @@ export function GetCurrentRoom() {
   return window['go']['main']['App']['GetCurrentRoom']();
 }
 
+export function GetMapData() {
+  return window['go']['main']['App']['GetMapData']();
+}
+
+export function GetMapStats() {
+  return window['go']['main']['App']['GetMapStats']();
+}
+
 export function GetOutput() {
   return window['go']['main']['App']['GetOutput']();
 }
@@ -48,6 +56,10 @@ export function RegenerateRoomImage() {
 
 export function RegenerateRoomImageWithPrompt(arg1) {
   return window['go']['main']['App']['RegenerateRoomImageWithPrompt'](arg1);
+}
+
+export function SaveMapNow() {
+  return window['go']['main']['App']['SaveMapNow']();
 }
 
 export function SendCommand(arg1) {

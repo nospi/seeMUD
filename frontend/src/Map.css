@@ -1,0 +1,150 @@
+.map-panel {
+    display: flex;
+    flex-direction: column;
+    padding: 1rem;
+    background: #0f3460;
+    overflow-y: auto;
+    flex-shrink: 0;
+    min-width: 300px;
+    max-width: 700px;
+}
+
+.map-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.map-header h3 {
+    color: #e94560;
+    font-size: 1.1rem;
+    margin: 0;
+}
+
+.map-stats {
+    display: flex;
+    gap: 1rem;
+    font-size: 0.9rem;
+    color: #ccc;
+}
+
+.z-level {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.z-button {
+    background: #16213e;
+    border: 1px solid #333;
+    color: #eee;
+    padding: 0.2rem 0.4rem;
+    cursor: pointer;
+    font-size: 0.8rem;
+    border-radius: 3px;
+    transition: all 0.2s;
+}
+
+.z-button:hover:not(:disabled) {
+    background: #e94560;
+    border-color: #e94560;
+}
+
+.z-button:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+}
+
+.map-canvas-container {
+    background: #0f0f23;
+    border-radius: 4px;
+    padding: 0.5rem;
+    margin-bottom: 1rem;
+    border: 2px solid #16213e;
+}
+
+.map-canvas {
+    display: block;
+    width: 100%;
+    cursor: crosshair;
+    image-rendering: crisp-edges;
+}
+
+.room-details {
+    background: #1a1a2e;
+    border-radius: 4px;
+    padding: 0.75rem;
+    border-left: 3px solid #e94560;
+}
+
+.room-details h4 {
+    color: #e94560;
+    margin: 0 0 0.5rem 0;
+    font-size: 1rem;
+}
+
+.room-coords,
+.room-visits {
+    color: #ccc;
+    font-size: 0.85rem;
+    margin: 0.25rem 0;
+}
+
+.room-exits {
+    color: #ffc107;
+    font-size: 0.85rem;
+    margin-top: 0.5rem;
+}
+
+.room-exits strong {
+    color: #eee;
+}
+
+.map-placeholder {
+    min-height: 300px;
+    background: #1a1a2e;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #666;
+    border: 2px dashed #333;
+    font-style: italic;
+}
+
+/* Legend */
+.map-legend {
+    display: flex;
+    gap: 1rem;
+    font-size: 0.8rem;
+    color: #ccc;
+    padding: 0.5rem;
+    background: #1a1a2e;
+    border-radius: 4px;
+    margin-top: 0.5rem;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+}
+
+.legend-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+}
+
+.legend-dot.current {
+    background: #e94560;
+}
+
+.legend-dot.visited {
+    background: #4caf50;
+}
+
+.legend-dot.unvisited {
+    background: #666;
+}

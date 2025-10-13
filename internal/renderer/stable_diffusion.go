@@ -118,7 +118,7 @@ func (sd *StableDiffusionClient) CheckHealth(ctx context.Context) error {
 	return nil
 }
 
-// RoomImagePrompt generates an optimized prompt for room generation
+// RoomImagePrompt generates an optimised prompt for room generation
 func RoomImagePrompt(roomName, description string) string {
 	basePrompt := fmt.Sprintf("Fantasy medieval environment, %s. %s", roomName, description)
 
@@ -131,6 +131,57 @@ func RoomImagePrompt(roomName, description string) string {
 // RoomImagePromptWithCustom generates a room prompt with custom user additions
 func RoomImagePromptWithCustom(roomName, description, customAdditions string) string {
 	basePrompt := RoomImagePrompt(roomName, description)
+
+	if customAdditions != "" {
+		return basePrompt + ", " + customAdditions
+	}
+
+	return basePrompt
+}
+
+// RoomImagePromptWithNeighbours generates a prompt that includes context from neighbouring rooms
+// neighbours is a map of direction -> (roomName, roomDescription)
+func RoomImagePromptWithNeighbours(roomName, description string, neighbours map[string]map[string]string) string {
+	basePrompt := fmt.Sprintf("Fantasy medieval environment, %s. %s", roomName, description)
+
+	// Add neighbour context to make images cohesive
+	if len(neighbours) > 0 {
+		contextual := ""
+
+		for direction, roomInfo := range neighbours {
+			neighbourName := roomInfo["name"]
+			neighbourDesc := roomInfo["description"]
+
+			// Truncate long descriptions
+			if len(neighbourDesc) > 80 {
+				neighbourDesc = neighbourDesc[:80] + "..."
+			}
+
+			// Add directional context
+			switch direction {
+			case "n", "north":
+				contextual += fmt.Sprintf(". To the north lies %s: %s", neighbourName, neighbourDesc)
+			case "s", "south":
+				contextual += fmt.Sprintf(". To the south lies %s: %s", neighbourName, neighbourDesc)
+			case "e", "east":
+				contextual += fmt.Sprintf(". To the east lies %s: %s", neighbourName, neighbourDesc)
+			case "w", "west":
+				contextual += fmt.Sprintf(". To the west lies %s: %s", neighbourName, neighbourDesc)
+			}
+		}
+
+		basePrompt += contextual
+	}
+
+	// Add quality and style modifiers
+	stylePrompt := ", highly detailed, atmospheric lighting, fantasy art style, cinematic composition, 8k, masterpiece"
+
+	return basePrompt + stylePrompt
+}
+
+// RoomImagePromptWithNeighboursAndCustom combines neighbour context with custom additions
+func RoomImagePromptWithNeighboursAndCustom(roomName, description string, neighbours map[string]map[string]string, customAdditions string) string {
+	basePrompt := RoomImagePromptWithNeighbours(roomName, description, neighbours)
 
 	if customAdditions != "" {
 		return basePrompt + ", " + customAdditions

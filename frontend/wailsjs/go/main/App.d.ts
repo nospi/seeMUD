@@ -15,6 +15,10 @@ export function GetCurrentEntities():Promise<Record<string, Array<string>>>;
 
 export function GetCurrentRoom():Promise<Record<string, string>>;
 
+export function GetMapData():Promise<Record<string, any>>;
+
+export function GetMapStats():Promise<Record<string, any>>;
+
 export function GetOutput():Promise<Array<string>>;
 
 export function GetRoomImage():Promise<string>;
@@ -24,5 +28,7 @@ export function Greet(arg1:string):Promise<string>;
 export function RegenerateRoomImage():Promise<string>;
 
 export function RegenerateRoomImageWithPrompt(arg1:string):Promise<string>;
+
+export function SaveMapNow():Promise<void>;
 
 export function SendCommand(arg1:string):Promise<void>;

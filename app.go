@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"seemud-gui/internal/mapper"
 	"seemud-gui/internal/parser"
 	"seemud-gui/internal/renderer"
 	"seemud-gui/internal/telnet"
@@ -22,6 +23,7 @@ type App struct {
 	ctx            context.Context
 	mudClient      *telnet.Client
 	mudParser      *parser.WolfMUDParser
+	mudMapper      *mapper.Mapper
 	sdClient       *renderer.StableDiffusionClient
 	outputBuf      []string
 	outputMux      sync.RWMutex
@@ -33,6 +35,7 @@ type App struct {
 	currentItems   []string // Items in current room
 	currentMobs    []string // Mobs/NPCs in current room
 	entityMux      sync.RWMutex
+	serverName     string   // Current MUD server name for map persistence
 }
 
 const defaultSDEndpoint = "http://127.0.0.1:7860"
@@ -64,6 +67,7 @@ func NewApp() *App {
 
 	return &App{
 		mudParser:      parser.NewWolfMUDParser(),
+		mudMapper:      mapper.NewMapper(),
 		sdClient:       renderer.NewStableDiffusionClient(sdEndpoint),
 		outputBuf:      make([]string, 0, 1000), // Buffer last 1000 lines
 		roomImageCache: imageCache,
@@ -89,6 +93,13 @@ func (a *App) ConnectToMUD(host, port string) error {
 	}
 
 	a.connected = true
+	a.serverName = fmt.Sprintf("%s_%s", host, port)
+
+	// Load existing map for this server
+	if err := a.mudMapper.LoadMap(a.serverName); err != nil {
+		log.Printf("Warning: Failed to load map: %v", err)
+		// Continue anyway - we'll start a new map
+	}
 
 	// Start processing output
 	go a.processOutput()
@@ -103,6 +114,14 @@ func (a *App) DisconnectFromMUD() error {
 	}
 
 	a.connected = false
+
+	// Save map before disconnecting
+	if a.serverName != "" {
+		if err := a.mudMapper.SaveMap(a.serverName); err != nil {
+			log.Printf("Warning: Failed to save map: %v", err)
+		}
+	}
+
 	return a.mudClient.Disconnect()
 }
 
@@ -110,6 +129,11 @@ func (a *App) DisconnectFromMUD() error {
 func (a *App) SendCommand(command string) error {
 	if a.mudClient == nil || !a.mudClient.IsConnected() {
 		return fmt.Errorf("not connected to MUD")
+	}
+
+	// Check if this is a movement command and notify mapper
+	if isMovement, direction := mapper.IsMovementCommand(command); isMovement {
+		a.mudMapper.OnMovement(direction)
 	}
 
 	return a.mudClient.SendCommand(command)
@@ -183,6 +207,8 @@ func (a *App) processOutput() {
 				a.entityMux.Unlock()
 
 				log.Printf("Room title detected: %s", parsed.RoomName)
+
+				// Notify mapper of room entry (will be updated with description and exits later)
 			} else if parsed.Type == parser.TypeRoomDescription {
 				a.roomMux.Lock()
 				if a.currentRoom != nil && a.currentRoom.Type == parser.TypeRoomTitle {
@@ -191,6 +217,22 @@ func (a *App) processOutput() {
 					log.Printf("Room description added: %s", parsed.Content)
 				}
 				a.roomMux.Unlock()
+			} else if parsed.Type == parser.TypeExits && len(parsed.Exits) > 0 {
+				// When we get exits, we have enough info to notify mapper
+				a.roomMux.RLock()
+				if a.currentRoom != nil && a.currentRoom.RoomName != "" {
+					roomName := a.currentRoom.RoomName
+					roomDesc := a.currentRoom.Content
+					exits := parsed.Exits
+					a.roomMux.RUnlock()
+
+					// Notify mapper in background to not block
+					go func() {
+						a.mudMapper.OnRoomEntered(roomName, roomDesc, exits)
+					}()
+				} else {
+					a.roomMux.RUnlock()
+				}
 			} else if parsed.Type == parser.TypeInventory && len(parsed.Items) > 0 {
 				// Add items to current room inventory
 				a.entityMux.Lock()
@@ -266,12 +308,27 @@ func (a *App) generateNewRoomImage(currentRoom *parser.ParsedOutput, customPromp
 		return "", fmt.Errorf("Stable Diffusion not available: %w", err)
 	}
 
-	// Generate new image
-	log.Printf("Generating new image for room: %s", currentRoom.RoomName)
+	// Get neighbour context from mapper
+	neighbours := a.mudMapper.GetNeighbours()
+	neighbourMap := make(map[string]map[string]string)
+
+	if neighbours != nil {
+		for direction, room := range neighbours {
+			neighbourMap[direction] = map[string]string{
+				"name":        room.Name,
+				"description": room.Description,
+			}
+		}
+	}
+
+	// Generate new image with neighbour context
+	log.Printf("Generating new image for room: %s (with %d neighbours)", currentRoom.RoomName, len(neighbourMap))
 	var prompt string
 	if customPrompt != "" {
 		log.Printf("Using custom prompt additions: %s", customPrompt)
-		prompt = renderer.RoomImagePromptWithCustom(currentRoom.RoomName, currentRoom.Content, customPrompt)
+		prompt = renderer.RoomImagePromptWithNeighboursAndCustom(currentRoom.RoomName, currentRoom.Content, neighbourMap, customPrompt)
+	} else if len(neighbourMap) > 0 {
+		prompt = renderer.RoomImagePromptWithNeighbours(currentRoom.RoomName, currentRoom.Content, neighbourMap)
 	} else {
 		prompt = renderer.RoomImagePrompt(currentRoom.RoomName, currentRoom.Content)
 	}
@@ -461,4 +518,61 @@ func (a *App) GetRoomImage() string {
 	}
 
 	return ""
+}
+
+// Mapper API methods
+
+// GetMapData returns the current map data for frontend visualisation
+func (a *App) GetMapData() map[string]interface{} {
+	graph := a.mudMapper.GetGraph()
+	currentRoom := a.mudMapper.GetCurrentRoom()
+
+	// Convert rooms to simplified format for frontend
+	rooms := make([]map[string]interface{}, 0, len(graph.Rooms))
+	for _, room := range graph.Rooms {
+		rooms = append(rooms, map[string]interface{}{
+			"id":          room.ID,
+			"name":        room.Name,
+			"x":           room.X,
+			"y":           room.Y,
+			"z":           room.Z,
+			"exits":       room.Exits,
+			"visit_count": room.VisitCount,
+		})
+	}
+
+	// Get map bounds
+	minX, maxX, minY, maxY, minZ, maxZ := graph.GetBounds()
+
+	var currentRoomID string
+	if currentRoom != nil {
+		currentRoomID = currentRoom.ID
+	}
+
+	return map[string]interface{}{
+		"rooms":           rooms,
+		"current_room_id": currentRoomID,
+		"bounds": map[string]int{
+			"min_x": minX,
+			"max_x": maxX,
+			"min_y": minY,
+			"max_y": maxY,
+			"min_z": minZ,
+			"max_z": maxZ,
+		},
+		"total_rooms": len(rooms),
+	}
+}
+
+// GetMapStats returns statistics about the mapper
+func (a *App) GetMapStats() map[string]interface{} {
+	return a.mudMapper.GetMapStats()
+}
+
+// SaveMapNow manually triggers map save
+func (a *App) SaveMapNow() error {
+	if a.serverName == "" {
+		return fmt.Errorf("no server connected")
+	}
+	return a.mudMapper.SaveMap(a.serverName)
 }
