@@ -15,6 +15,10 @@ export function GetCurrentRoom():Promise<Record<string, string>>;
 
 export function GetOutput():Promise<Array<string>>;
 
+export function GetRoomImage():Promise<string>;
+
 export function Greet(arg1:string):Promise<string>;
+
+export function RegenerateRoomImage():Promise<string>;
 
 export function SendCommand(arg1:string):Promise<void>;

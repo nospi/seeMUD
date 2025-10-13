@@ -8,7 +8,9 @@ import {
     GetOutput,
     GetConnectionStatus,
     GenerateRoomImage,
+    RegenerateRoomImage,
     GetCurrentRoom,
+    GetRoomImage,
     CheckSDStatus
 } from "../wailsjs/go/main/App";
 
@@ -26,6 +28,7 @@ function App() {
 
     const outputEndRef = useRef(null);
     const inputRef = useRef(null);
+    const generatingRef = useRef(false);
 
     // Auto-scroll to bottom when new output arrives
     useEffect(() => {
@@ -51,7 +54,14 @@ function App() {
                 // Check for room updates
                 const room = await GetCurrentRoom();
                 if (room && (room.name || room.description)) {
-                    setCurrentRoom(room);
+                    // Check if room has changed
+                    setCurrentRoom(prevRoom => {
+                        if (prevRoom.name !== room.name) {
+                            // Room changed, check for cached image
+                            checkCachedImage(room);
+                        }
+                        return room;
+                    });
                 }
             } catch (err) {
                 console.error("Error getting output:", err);
@@ -67,7 +77,16 @@ function App() {
         const checkSD = async () => {
             try {
                 const available = await CheckSDStatus();
-                setSdAvailable(available);
+                setSdAvailable(prev => {
+                    // If SD just became available and we have a room without image, generate
+                    if (!prev && available && currentRoom.name && !roomImage && !generatingRef.current) {
+                        console.log("SD just became available, checking for image generation needs");
+                        setTimeout(() => {
+                            checkCachedImage();
+                        }, 500);
+                    }
+                    return available;
+                });
             } catch (err) {
                 setSdAvailable(false);
             }
@@ -76,7 +95,7 @@ function App() {
         checkSD();
         const interval = setInterval(checkSD, 10000); // Check every 10 seconds
         return () => clearInterval(interval);
-    }, []);
+    }, [currentRoom.name, roomImage]);
 
     const handleConnect = async () => {
         setConnecting(true);
@@ -84,6 +103,12 @@ function App() {
             await ConnectToMUD("localhost", "4001");
             setConnected(true);
             setOutput(prev => [...prev, "🎮 Connected to WolfMUD!", ""]);
+            // Check for cached image after initial connection with longer delay
+            // to ensure room data is loaded
+            setTimeout(() => {
+                console.log("Initial connection - checking for cached image");
+                checkCachedImage();
+            }, 1500);
         } catch (err) {
             setOutput(prev => [...prev, `❌ Connection failed: ${err.message || err}`]);
             console.error("Connection error:", err);
@@ -149,17 +174,89 @@ function App() {
         }
     };
 
-    const handleGenerateImage = async () => {
-        if (!sdAvailable || !currentRoom.name || generatingImage) return;
+    // Check if there's a cached image for the current room
+    const checkCachedImage = async (roomData = null) => {
+        try {
+            const cachedImage = await GetRoomImage();
+            if (cachedImage) {
+                console.log("Found cached image for room");
+                setRoomImage(`data:image/png;base64,${cachedImage}`);
+                return true; // Image found
+            } else {
+                // Use passed roomData or fetch current room
+                const room = roomData || await GetCurrentRoom();
+                console.log("No cached image found for room:", room);
+                console.log("SD Available:", sdAvailable, "Generating:", generatingRef.current);
+                setRoomImage(null);
 
+                // Auto-generate image for new rooms if SD is available
+                // We need to ensure room has a name and SD is ready
+                if (room && room.name && room.name.trim() !== "") {
+                    console.log("Room is valid, checking SD and generation status...");
+                    // Try auto-generation after a delay to ensure SD status is updated
+                    setTimeout(async () => {
+                        const sdStatus = await CheckSDStatus();
+                        console.log("SD Status check:", sdStatus, "Generating:", generatingRef.current);
+                        if (sdStatus && !generatingRef.current) {
+                            console.log("Auto-generating image for room:", room.name);
+                            // For auto-generation, always generate new (not regenerate)
+                            autoGenerateImage(room);
+                        }
+                    }, 1000); // Slightly longer delay to ensure everything is ready
+                }
+                return false; // No image found
+            }
+        } catch (err) {
+            console.error("Error checking cached image:", err);
+            return false;
+        }
+    };
+
+    // Auto-generate function that always generates new (for rooms without images)
+    const autoGenerateImage = async (roomData = null) => {
+        const room = roomData || currentRoom;
+        console.log("autoGenerateImage called with room:", room, "generating:", generatingRef.current);
+
+        if (!room || !room.name || generatingRef.current) {
+            console.log("Aborting auto-generation - room:", !!room, "name:", room?.name, "generating:", generatingRef.current);
+            return;
+        }
+
+        console.log("Starting auto-generation for room:", room.name);
+        generatingRef.current = true;
         setGeneratingImage(true);
         try {
-            const imageBase64 = await GenerateRoomImage();
+            console.log("Calling RegenerateRoomImage for room:", room.name);
+            // Use RegenerateRoomImage to bypass cache and always generate fresh
+            const imageBase64 = await RegenerateRoomImage();
+            console.log("Got image, setting room image");
+            setRoomImage(`data:image/png;base64,${imageBase64}`);
+        } catch (err) {
+            console.error("Auto image generation failed:", err);
+            setOutput(prev => [...prev, `❌ Auto image generation failed: ${err.message || err}`]);
+        } finally {
+            console.log("Auto-generation completed, resetting flags");
+            generatingRef.current = false;
+            setGeneratingImage(false);
+        }
+    };
+
+    const handleGenerateImage = async () => {
+        if (!sdAvailable || !currentRoom.name || generatingRef.current) return;
+
+        generatingRef.current = true;
+        setGeneratingImage(true);
+        try {
+            // Use RegenerateRoomImage if we already have an image, otherwise use GenerateRoomImage
+            const imageBase64 = roomImage
+                ? await RegenerateRoomImage()
+                : await GenerateRoomImage();
             setRoomImage(`data:image/png;base64,${imageBase64}`);
         } catch (err) {
             console.error("Image generation failed:", err);
             setOutput(prev => [...prev, `❌ Image generation failed: ${err.message || err}`]);
         } finally {
+            generatingRef.current = false;
             setGeneratingImage(false);
         }
     };
@@ -262,7 +359,7 @@ function App() {
                                     />
                                 ) : (
                                     <div className="image-placeholder">
-                                        <p>{currentRoom.name ? 'Ready to generate image' : 'Explore a room to generate images'}</p>
+                                        <p>{currentRoom.name ? 'No image yet - click Generate to create one' : 'Explore a room to see images'}</p>
                                     </div>
                                 )}
                             </div>
@@ -272,7 +369,8 @@ function App() {
                                     disabled={!sdAvailable || !currentRoom.name || generatingImage}
                                     className="btn-generate"
                                 >
-                                    {generatingImage ? '🎨 Generating...' : '🎨 Generate Image'}
+                                    {generatingImage ? '🎨 Generating...' :
+                                     roomImage ? '🔄 Regenerate Image' : '🎨 Generate Image'}
                                 </button>
                                 <div className="sd-status">
                                     SD: <span className={sdAvailable ? 'status-ok' : 'status-error'}>

@@ -233,7 +233,8 @@ func (p *WolfMUDParser) isRoomTitle(line string) bool {
 		return false
 	}
 
-	// WolfMUD room titles are typically enclosed in brackets: [Room Name]
+	// WolfMUD room titles are ALWAYS enclosed in brackets: [Room Name]
+	// We should be strict about this to avoid false positives
 	if strings.HasPrefix(line, "[") && strings.HasSuffix(line, "]") && len(line) > 2 {
 		// Extract content between brackets
 		content := line[1 : len(line)-1]
@@ -243,32 +244,8 @@ func (p *WolfMUDParser) isRoomTitle(line string) bool {
 		}
 	}
 
-	// Fallback: general room title detection
-	// Room titles are typically:
-	// - Short (< 50 chars)
-	// - Don't end with punctuation (except maybe :)
-	// - Often title case
-	if len(line) > 50 {
-		return false
-	}
-
-	// Check if it ends with sentence punctuation
-	lastChar := line[len(line)-1]
-	if lastChar == '.' || lastChar == '!' || lastChar == '?' {
-		return false
-	}
-
-	// Check if it has multiple sentences (likely description)
-	if strings.Contains(line, ". ") {
-		return false
-	}
-
-	// Avoid detecting exits as room titles
-	if strings.Contains(strings.ToLower(line), "exit") {
-		return false
-	}
-
-	return true
+	// No fallback - only bracketed titles are room titles
+	return false
 }
 
 // isSystemMessage checks if a line is a system message

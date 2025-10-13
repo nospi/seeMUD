@@ -2,8 +2,13 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"log"
+	"os"
+	"path/filepath"
+	"regexp"
+	"strings"
 	"sync"
 	"time"
 
@@ -14,23 +19,51 @@ import (
 
 // App struct
 type App struct {
-	ctx        context.Context
-	mudClient  *telnet.Client
-	mudParser  *parser.WolfMUDParser
-	sdClient   *renderer.StableDiffusionClient
-	outputBuf  []string
-	outputMux  sync.RWMutex
-	connected  bool
-	currentRoom *parser.ParsedOutput
-	roomMux     sync.RWMutex
+	ctx            context.Context
+	mudClient      *telnet.Client
+	mudParser      *parser.WolfMUDParser
+	sdClient       *renderer.StableDiffusionClient
+	outputBuf      []string
+	outputMux      sync.RWMutex
+	connected      bool
+	currentRoom    *parser.ParsedOutput
+	roomMux        sync.RWMutex
+	roomImageCache map[string]string // Map of room name to image file path
+	imageCacheMux  sync.RWMutex
+}
+
+const defaultSDEndpoint = "http://127.0.0.1:7860"
+
+func resolveSDEndpoint() string {
+	if value := strings.TrimSpace(os.Getenv("SEEMUD_SD_ENDPOINT")); value != "" {
+		if strings.HasPrefix(value, "http://") || strings.HasPrefix(value, "https://") {
+			return value
+		}
+		return "http://" + value
+	}
+
+	return defaultSDEndpoint
 }
 
 // NewApp creates a new App application struct
 func NewApp() *App {
+	sdEndpoint := resolveSDEndpoint()
+	log.Printf("Stable Diffusion endpoint: %s", sdEndpoint)
+
+	// Ensure cache directory exists
+	cacheDir := filepath.Join("cache", "room_images")
+	if err := os.MkdirAll(cacheDir, 0755); err != nil {
+		log.Printf("Warning: Failed to create cache directory: %v", err)
+	}
+
+	// Load existing image cache
+	imageCache := loadImageCache(cacheDir)
+
 	return &App{
-		mudParser: parser.NewWolfMUDParser(),
-		sdClient:  renderer.NewStableDiffusionClient("http://127.0.0.1:7860"),
-		outputBuf: make([]string, 0, 1000), // Buffer last 1000 lines
+		mudParser:      parser.NewWolfMUDParser(),
+		sdClient:       renderer.NewStableDiffusionClient(sdEndpoint),
+		outputBuf:      make([]string, 0, 1000), // Buffer last 1000 lines
+		roomImageCache: imageCache,
 	}
 }
 
@@ -139,11 +172,11 @@ func (a *App) processOutput() {
 				a.roomMux.Lock()
 				a.currentRoom = parsed
 				a.roomMux.Unlock()
-				log.Printf("Room title detected: %s", parsed.Content)
-			} else if parsed.Type == parser.TypeRoomDescription && a.currentRoom != nil {
+				log.Printf("Room title detected: %s", parsed.RoomName)
+			} else if parsed.Type == parser.TypeRoomDescription {
 				a.roomMux.Lock()
-				if a.currentRoom != nil {
-					// Combine room title and description for image generation
+				if a.currentRoom != nil && a.currentRoom.Type == parser.TypeRoomTitle {
+					// Only add description if we have a valid room title
 					a.currentRoom.Content += " " + parsed.Content
 					log.Printf("Room description added: %s", parsed.Content)
 				}
@@ -153,16 +186,42 @@ func (a *App) processOutput() {
 	}
 }
 
-// GenerateRoomImage generates an image for the current room
+// GenerateRoomImage generates an image for the current room (uses cache if available)
 func (a *App) GenerateRoomImage() (string, error) {
 	a.roomMux.RLock()
 	currentRoom := a.currentRoom
 	a.roomMux.RUnlock()
 
-	if currentRoom == nil {
+	if currentRoom == nil || currentRoom.RoomName == "" {
 		return "", fmt.Errorf("no room data available")
 	}
 
+	// Check cache first
+	if base64Image, exists := a.loadImageFromCache(currentRoom.RoomName); exists {
+		log.Printf("Returning cached image for room: %s", currentRoom.RoomName)
+		return base64Image, nil
+	}
+
+	// No cached image, generate new one
+	return a.generateNewRoomImage(currentRoom)
+}
+
+// RegenerateRoomImage forces generation of a new image for the current room
+func (a *App) RegenerateRoomImage() (string, error) {
+	a.roomMux.RLock()
+	currentRoom := a.currentRoom
+	a.roomMux.RUnlock()
+
+	if currentRoom == nil || currentRoom.RoomName == "" {
+		return "", fmt.Errorf("no room data available")
+	}
+
+	// Always generate new image, ignoring cache
+	return a.generateNewRoomImage(currentRoom)
+}
+
+// generateNewRoomImage is a helper that actually generates a new image
+func (a *App) generateNewRoomImage(currentRoom *parser.ParsedOutput) (string, error) {
 	// Check if SD is available
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -171,7 +230,8 @@ func (a *App) GenerateRoomImage() (string, error) {
 		return "", fmt.Errorf("Stable Diffusion not available: %w", err)
 	}
 
-	// Generate image
+	// Generate new image
+	log.Printf("Generating new image for room: %s", currentRoom.RoomName)
 	prompt := renderer.RoomImagePrompt(currentRoom.RoomName, currentRoom.Content)
 	req := &renderer.Txt2ImgRequest{
 		Prompt:         prompt,
@@ -194,8 +254,16 @@ func (a *App) GenerateRoomImage() (string, error) {
 		return "", fmt.Errorf("no images generated")
 	}
 
+	base64Image := resp.Images[0]
+
+	// Save to cache (overwrites existing)
+	if err := a.saveImageToCache(currentRoom.RoomName, base64Image); err != nil {
+		log.Printf("Warning: Failed to save image to cache: %v", err)
+		// Don't fail the operation, just warn
+	}
+
 	// Return base64 encoded image
-	return resp.Images[0], nil
+	return base64Image, nil
 }
 
 // GetCurrentRoom returns the current room information
@@ -203,10 +271,11 @@ func (a *App) GetCurrentRoom() map[string]string {
 	a.roomMux.RLock()
 	defer a.roomMux.RUnlock()
 
-	if a.currentRoom == nil {
+	if a.currentRoom == nil || a.currentRoom.Type != parser.TypeRoomTitle {
 		return map[string]string{}
 	}
 
+	// Only return room info if we have a valid room title
 	return map[string]string{
 		"name":        a.currentRoom.RoomName,
 		"description": a.currentRoom.Content,
@@ -215,7 +284,7 @@ func (a *App) GetCurrentRoom() map[string]string {
 
 // CheckSDStatus checks if Stable Diffusion is available
 func (a *App) CheckSDStatus() bool {
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	return a.sdClient.CheckHealth(ctx) == nil
@@ -224,4 +293,119 @@ func (a *App) CheckSDStatus() bool {
 // Greet returns a greeting for the given name (keeping for now)
 func (a *App) Greet(name string) string {
 	return fmt.Sprintf("Hello %s, Welcome to See-MUD!", name)
+}
+
+// Helper functions for image caching
+
+// sanitizeRoomName converts a room name to a safe filename
+func sanitizeRoomName(roomName string) string {
+	// Remove or replace characters that aren't safe for filenames
+	reg := regexp.MustCompile(`[^a-zA-Z0-9_\-]`)
+	sanitized := reg.ReplaceAllString(strings.ToLower(roomName), "_")
+	// Remove multiple underscores
+	reg = regexp.MustCompile(`_+`)
+	sanitized = reg.ReplaceAllString(sanitized, "_")
+	// Trim underscores from ends
+	sanitized = strings.Trim(sanitized, "_")
+
+	if sanitized == "" {
+		sanitized = "unknown_room"
+	}
+
+	return sanitized
+}
+
+// loadImageCache scans the cache directory and builds the cache map
+func loadImageCache(cacheDir string) map[string]string {
+	cache := make(map[string]string)
+
+	entries, err := os.ReadDir(cacheDir)
+	if err != nil {
+		log.Printf("Could not read cache directory: %v", err)
+		return cache
+	}
+
+	for _, entry := range entries {
+		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".png") {
+			// Store the full path in the cache
+			cache[entry.Name()] = filepath.Join(cacheDir, entry.Name())
+			log.Printf("Loaded cached image: %s", entry.Name())
+		}
+	}
+
+	return cache
+}
+
+// saveImageToCache saves a base64 image to the cache directory
+func (a *App) saveImageToCache(roomName string, base64Image string) error {
+	sanitized := sanitizeRoomName(roomName)
+	filename := sanitized + ".png"
+	filepath := filepath.Join("cache", "room_images", filename)
+
+	// Decode base64 image
+	imageData, err := base64.StdEncoding.DecodeString(base64Image)
+	if err != nil {
+		return fmt.Errorf("failed to decode base64 image: %w", err)
+	}
+
+	// Write to file
+	if err := os.WriteFile(filepath, imageData, 0644); err != nil {
+		return fmt.Errorf("failed to save image to cache: %w", err)
+	}
+
+	// Update cache map
+	a.imageCacheMux.Lock()
+	a.roomImageCache[filename] = filepath
+	a.imageCacheMux.Unlock()
+
+	log.Printf("Saved image to cache: %s", filepath)
+	return nil
+}
+
+// loadImageFromCache loads an image from cache if it exists
+func (a *App) loadImageFromCache(roomName string) (string, bool) {
+	sanitized := sanitizeRoomName(roomName)
+	filename := sanitized + ".png"
+
+	a.imageCacheMux.RLock()
+	filepath, exists := a.roomImageCache[filename]
+	a.imageCacheMux.RUnlock()
+
+	if !exists {
+		return "", false
+	}
+
+	// Read the file
+	imageData, err := os.ReadFile(filepath)
+	if err != nil {
+		log.Printf("Failed to read cached image %s: %v", filepath, err)
+		// Remove from cache if file doesn't exist
+		a.imageCacheMux.Lock()
+		delete(a.roomImageCache, filename)
+		a.imageCacheMux.Unlock()
+		return "", false
+	}
+
+	// Encode to base64
+	base64Image := base64.StdEncoding.EncodeToString(imageData)
+	return base64Image, true
+}
+
+// GetRoomImage returns a cached image for the current room or empty string if none exists
+func (a *App) GetRoomImage() string {
+	a.roomMux.RLock()
+	currentRoom := a.currentRoom
+	a.roomMux.RUnlock()
+
+	if currentRoom == nil || currentRoom.RoomName == "" {
+		return ""
+	}
+
+	// Try to load from cache
+	if base64Image, exists := a.loadImageFromCache(currentRoom.RoomName); exists {
+		log.Printf("Returning cached image for room: %s", currentRoom.RoomName)
+		return base64Image
+	}
+
+	return ""
 }

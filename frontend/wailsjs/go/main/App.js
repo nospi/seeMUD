@@ -30,8 +30,16 @@ export function GetOutput() {
   return window['go']['main']['App']['GetOutput']();
 }
 
+export function GetRoomImage() {
+  return window['go']['main']['App']['GetRoomImage']();
+}
+
 export function Greet(arg1) {
   return window['go']['main']['App']['Greet'](arg1);
+}
+
+export function RegenerateRoomImage() {
+  return window['go']['main']['App']['RegenerateRoomImage']();
 }
 
 export function SendCommand(arg1) {
