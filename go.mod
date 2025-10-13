@@ -1,4 +1,4 @@
-module see-mud-gui
+module seemud-gui
 
 go 1.23
 

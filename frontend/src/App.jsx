@@ -351,7 +351,7 @@ function App() {
     return (
         <div className="App">
             <div className="header">
-                <h1>🎮 See-MUD Visual Client</h1>
+                <h1>🎮 SeeMUD Visual Client</h1>
                 <div className="connection-status">
                     {connected ? (
                         <>

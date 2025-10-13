@@ -12,9 +12,9 @@ import (
 	"sync"
 	"time"
 
-	"see-mud-gui/internal/parser"
-	"see-mud-gui/internal/renderer"
-	"see-mud-gui/internal/telnet"
+	"seemud-gui/internal/parser"
+	"seemud-gui/internal/renderer"
+	"seemud-gui/internal/telnet"
 )
 
 // App struct
@@ -312,7 +312,7 @@ func (a *App) CheckSDStatus() bool {
 
 // Greet returns a greeting for the given name (keeping for now)
 func (a *App) Greet(name string) string {
-	return fmt.Sprintf("Hello %s, Welcome to See-MUD!", name)
+	return fmt.Sprintf("Hello %s, Welcome to SeeMUD!", name)
 }
 
 // Helper functions for image caching

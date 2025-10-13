@@ -1,8 +1,8 @@
-# See-MUD: Visual MUD Client Product Requirements Document
+# SeeMUD: Visual MUD Client Product Requirements Document
 
 ## Executive Summary
 
-See-MUD is an innovative MUD (Multi-User Dungeon) client that enhances the traditional text-based gaming experience by automatically generating visual representations of game environments, items, and characters. The system uses AI-powered image generation and intelligent caching to create immersive, dynamic visuals while maintaining the classic MUD gameplay experience.
+SeeMUD is an innovative MUD (Multi-User Dungeon) client that enhances the traditional text-based gaming experience by automatically generating visual representations of game environments, items, and characters. The system uses AI-powered image generation and intelligent caching to create immersive, dynamic visuals while maintaining the classic MUD gameplay experience.
 
 ## Project Vision
 
@@ -238,7 +238,7 @@ type Cache interface {
 
 ### Example Configuration File
 ```yaml
-# see-mud.config.yaml
+# seemud.config.yaml
 connection:
   host: "example.mud.com"
   port: 4000
@@ -260,7 +260,7 @@ generators:
     model: "dall-e-3"
 
 cache:
-  directory: "~/.see-mud/cache"
+  directory: "~/.seemud/cache"
   max_size: "10GB"
   strategy: "lru"
 

@@ -8,12 +8,12 @@ import (
 	"strings"
 	"time"
 
-	"see-mud-gui/internal/parser"
-	"see-mud-gui/internal/telnet"
+	"seemud-gui/internal/parser"
+	"seemud-gui/internal/telnet"
 )
 
 func main() {
-	fmt.Println("🎮 See-MUD Interactive Client")
+	fmt.Println("🎮 SeeMUD Interactive Client")
 	fmt.Println("==============================")
 	fmt.Println("Connecting to WolfMUD on localhost:4001...")
 
