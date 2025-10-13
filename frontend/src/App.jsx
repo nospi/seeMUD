@@ -9,6 +9,7 @@ import {
     GetConnectionStatus,
     GenerateRoomImage,
     RegenerateRoomImage,
+    RegenerateRoomImageWithPrompt,
     GetCurrentRoom,
     GetRoomImage,
     CheckSDStatus
@@ -27,6 +28,8 @@ function App() {
     const [sdAvailable, setSdAvailable] = useState(false);
     const [sidebarWidth, setSidebarWidth] = useState(600); // Default to 600px
     const [isResizing, setIsResizing] = useState(false);
+    const [showPromptInput, setShowPromptInput] = useState(false);
+    const [customPrompt, setCustomPrompt] = useState('');
 
     const outputEndRef = useRef(null);
     const inputRef = useRef(null);
@@ -294,6 +297,27 @@ function App() {
         }
     };
 
+    const handleGenerateWithCustomPrompt = async () => {
+        if (!sdAvailable || !currentRoom.name || generatingRef.current || !customPrompt.trim()) return;
+
+        generatingRef.current = true;
+        setGeneratingImage(true);
+        try {
+            const imageBase64 = await RegenerateRoomImageWithPrompt(customPrompt.trim());
+            setRoomImage(`data:image/png;base64,${imageBase64}`);
+        } catch (err) {
+            console.error("Custom image generation failed:", err);
+            setOutput(prev => [...prev, `❌ Custom image generation failed: ${err.message || err}`]);
+        } finally {
+            generatingRef.current = false;
+            setGeneratingImage(false);
+        }
+    };
+
+    const togglePromptInput = () => {
+        setShowPromptInput(prev => !prev);
+    };
+
     // Parse output for basic formatting with ANSI support
     const formatLine = (line) => {
         // Skip completely empty lines
@@ -402,14 +426,60 @@ function App() {
                                 )}
                             </div>
                             <div className="image-controls">
-                                <button
-                                    onClick={handleGenerateImage}
-                                    disabled={!sdAvailable || !currentRoom.name || generatingImage}
-                                    className="btn-generate"
-                                >
-                                    {generatingImage ? '🎨 Generating...' :
-                                     roomImage ? '🔄 Regenerate Image' : '🎨 Generate Image'}
-                                </button>
+                                {roomImage ? (
+                                    // Split button for regeneration
+                                    <>
+                                        <div className="btn-split-group">
+                                            <button
+                                                onClick={handleGenerateImage}
+                                                disabled={!sdAvailable || !currentRoom.name || generatingImage}
+                                                className="btn-split-main"
+                                            >
+                                                {generatingImage ? '🎨 Generating...' : '🔄 Regenerate'}
+                                            </button>
+                                            <button
+                                                onClick={togglePromptInput}
+                                                disabled={!sdAvailable || !currentRoom.name || generatingImage}
+                                                className="btn-split-dropdown"
+                                                title="Custom prompt options"
+                                            >
+                                                ▼
+                                            </button>
+                                        </div>
+
+                                        {showPromptInput && (
+                                            <div className="custom-prompt-section">
+                                                <label className="custom-prompt-label">
+                                                    Custom instructions:
+                                                </label>
+                                                <textarea
+                                                    className="custom-prompt-textarea"
+                                                    value={customPrompt}
+                                                    onChange={(e) => setCustomPrompt(e.target.value)}
+                                                    disabled={generatingImage}
+                                                    placeholder="e.g., darker, more fog, torchlight..."
+                                                    rows={3}
+                                                />
+                                                <button
+                                                    onClick={handleGenerateWithCustomPrompt}
+                                                    disabled={!sdAvailable || !currentRoom.name || generatingImage || !customPrompt.trim()}
+                                                    className="btn-generate-custom"
+                                                >
+                                                    {generatingImage ? '🎨 Generating...' : '✨ Generate with Custom Prompt'}
+                                                </button>
+                                            </div>
+                                        )}
+                                    </>
+                                ) : (
+                                    // Simple generate button when no image
+                                    <button
+                                        onClick={handleGenerateImage}
+                                        disabled={!sdAvailable || !currentRoom.name || generatingImage}
+                                        className="btn-generate"
+                                    >
+                                        {generatingImage ? '🎨 Generating...' : '🎨 Generate Image'}
+                                    </button>
+                                )}
                                 <div className="sd-status">
                                     SD: <span className={sdAvailable ? 'status-ok' : 'status-error'}>
                                         {sdAvailable ? '✅ Ready' : '❌ Not Available'}

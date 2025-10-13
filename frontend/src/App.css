@@ -313,6 +313,57 @@ body {
     gap: 0.5rem;
 }
 
+/* Split Button Styles */
+.btn-split-group {
+    display: flex;
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+.btn-split-main {
+    flex: 1;
+    padding: 0.75rem 1rem;
+    border: none;
+    background: linear-gradient(135deg, #e94560, #d63447);
+    color: white;
+    font-family: inherit;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-size: 0.95rem;
+    border-right: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.btn-split-dropdown {
+    padding: 0.75rem 0.75rem;
+    border: none;
+    background: linear-gradient(135deg, #e94560, #d63447);
+    color: white;
+    font-family: inherit;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-size: 0.8rem;
+    min-width: 40px;
+}
+
+.btn-split-main:hover:not(:disabled),
+.btn-split-dropdown:hover:not(:disabled) {
+    background: linear-gradient(135deg, #d63447, #c4334a);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(233, 69, 96, 0.3);
+}
+
+.btn-split-main:disabled,
+.btn-split-dropdown:disabled {
+    background: #666;
+    cursor: not-allowed;
+    opacity: 0.6;
+    transform: none;
+    box-shadow: none;
+}
+
+/* Standard generate button (used when no image exists) */
 .btn-generate {
     padding: 0.75rem 1rem;
     border: none;
@@ -333,6 +384,90 @@ body {
 }
 
 .btn-generate:disabled {
+    background: #666;
+    cursor: not-allowed;
+    opacity: 0.6;
+    transform: none;
+    box-shadow: none;
+}
+
+/* Custom Prompt Section */
+.custom-prompt-section {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 0.75rem;
+    background: #1a1a2e;
+    border-radius: 6px;
+    border: 1px solid #333;
+    animation: slideDown 0.3s ease;
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.custom-prompt-label {
+    color: #e94560;
+    font-size: 0.85rem;
+    font-weight: bold;
+}
+
+.custom-prompt-textarea {
+    width: 100%;
+    padding: 0.5rem;
+    background: #0f0f23;
+    border: 1px solid #444;
+    border-radius: 4px;
+    color: #eee;
+    font-family: inherit;
+    font-size: 0.9rem;
+    resize: vertical;
+    min-height: 60px;
+    transition: border-color 0.2s;
+}
+
+.custom-prompt-textarea:focus {
+    outline: none;
+    border-color: #e94560;
+}
+
+.custom-prompt-textarea::placeholder {
+    color: #666;
+}
+
+.custom-prompt-textarea:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.btn-generate-custom {
+    padding: 0.65rem 1rem;
+    border: none;
+    border-radius: 6px;
+    background: linear-gradient(135deg, #9b59b6, #8e44ad);
+    color: white;
+    font-family: inherit;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-size: 0.9rem;
+}
+
+.btn-generate-custom:hover:not(:disabled) {
+    background: linear-gradient(135deg, #8e44ad, #7d3c98);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(155, 89, 182, 0.3);
+}
+
+.btn-generate-custom:disabled {
     background: #666;
     cursor: not-allowed;
     opacity: 0.6;

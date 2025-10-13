@@ -128,6 +128,17 @@ func RoomImagePrompt(roomName, description string) string {
 	return basePrompt + stylePrompt
 }
 
+// RoomImagePromptWithCustom generates a room prompt with custom user additions
+func RoomImagePromptWithCustom(roomName, description, customAdditions string) string {
+	basePrompt := RoomImagePrompt(roomName, description)
+
+	if customAdditions != "" {
+		return basePrompt + ", " + customAdditions
+	}
+
+	return basePrompt
+}
+
 // GetNegativePrompt returns a standard negative prompt for fantasy environments
 func GetNegativePrompt() string {
 	return "blurry, low quality, text, watermark, signature, people, characters, figures, humans, animals, modern objects, cars, buildings, technology"

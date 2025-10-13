@@ -21,4 +21,6 @@ export function Greet(arg1:string):Promise<string>;
 
 export function RegenerateRoomImage():Promise<string>;
 
+export function RegenerateRoomImageWithPrompt(arg1:string):Promise<string>;
+
 export function SendCommand(arg1:string):Promise<void>;

@@ -42,6 +42,10 @@ export function RegenerateRoomImage() {
   return window['go']['main']['App']['RegenerateRoomImage']();
 }
 
+export function RegenerateRoomImageWithPrompt(arg1) {
+  return window['go']['main']['App']['RegenerateRoomImageWithPrompt'](arg1);
+}
+
 export function SendCommand(arg1) {
   return window['go']['main']['App']['SendCommand'](arg1);
 }

@@ -203,7 +203,7 @@ func (a *App) GenerateRoomImage() (string, error) {
 	}
 
 	// No cached image, generate new one
-	return a.generateNewRoomImage(currentRoom)
+	return a.generateNewRoomImage(currentRoom, "")
 }
 
 // RegenerateRoomImage forces generation of a new image for the current room
@@ -217,11 +217,25 @@ func (a *App) RegenerateRoomImage() (string, error) {
 	}
 
 	// Always generate new image, ignoring cache
-	return a.generateNewRoomImage(currentRoom)
+	return a.generateNewRoomImage(currentRoom, "")
+}
+
+// RegenerateRoomImageWithPrompt regenerates with custom user prompt additions
+func (a *App) RegenerateRoomImageWithPrompt(customPrompt string) (string, error) {
+	a.roomMux.RLock()
+	currentRoom := a.currentRoom
+	a.roomMux.RUnlock()
+
+	if currentRoom == nil || currentRoom.RoomName == "" {
+		return "", fmt.Errorf("no room data available")
+	}
+
+	// Always generate new image with custom prompt, ignoring cache
+	return a.generateNewRoomImage(currentRoom, customPrompt)
 }
 
 // generateNewRoomImage is a helper that actually generates a new image
-func (a *App) generateNewRoomImage(currentRoom *parser.ParsedOutput) (string, error) {
+func (a *App) generateNewRoomImage(currentRoom *parser.ParsedOutput, customPrompt string) (string, error) {
 	// Check if SD is available
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -232,7 +246,13 @@ func (a *App) generateNewRoomImage(currentRoom *parser.ParsedOutput) (string, er
 
 	// Generate new image
 	log.Printf("Generating new image for room: %s", currentRoom.RoomName)
-	prompt := renderer.RoomImagePrompt(currentRoom.RoomName, currentRoom.Content)
+	var prompt string
+	if customPrompt != "" {
+		log.Printf("Using custom prompt additions: %s", customPrompt)
+		prompt = renderer.RoomImagePromptWithCustom(currentRoom.RoomName, currentRoom.Content, customPrompt)
+	} else {
+		prompt = renderer.RoomImagePrompt(currentRoom.RoomName, currentRoom.Content)
+	}
 	req := &renderer.Txt2ImgRequest{
 		Prompt:         prompt,
 		NegativePrompt: renderer.GetNegativePrompt(),
