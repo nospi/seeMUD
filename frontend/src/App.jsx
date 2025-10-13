@@ -27,8 +27,10 @@ function App() {
     const [roomImage, setRoomImage] = useState(null);
     const [generatingImage, setGeneratingImage] = useState(false);
     const [sdAvailable, setSdAvailable] = useState(false);
-    const [sidebarWidth, setSidebarWidth] = useState(600); // Default to 600px
-    const [isResizing, setIsResizing] = useState(false);
+    const [imagePanelWidth, setImagePanelWidth] = useState(600); // Default to 600px
+    const [entitiesPanelWidth, setEntitiesPanelWidth] = useState(300); // Default to 300px
+    const [isResizingImage, setIsResizingImage] = useState(false);
+    const [isResizingEntities, setIsResizingEntities] = useState(false);
     const [showPromptInput, setShowPromptInput] = useState(false);
     const [customPrompt, setCustomPrompt] = useState('');
     const [entities, setEntities] = useState({ items: [], mobs: [] });
@@ -47,23 +49,23 @@ function App() {
         inputRef.current?.focus();
     }, []);
 
-    // Handle mouse move for resizing
+    // Handle mouse move for resizing image panel
     useEffect(() => {
         const handleMouseMove = (e) => {
-            if (!isResizing) return;
+            if (!isResizingImage) return;
 
-            const newWidth = window.innerWidth - e.clientX;
-            // Constrain between 300px and 80% of window width
+            const newWidth = window.innerWidth - e.clientX - entitiesPanelWidth - 8; // Subtract entities panel and resize handle
+            // Constrain between 300px and 50% of window width
             const minWidth = 300;
-            const maxWidth = window.innerWidth * 0.8;
-            setSidebarWidth(Math.min(Math.max(newWidth, minWidth), maxWidth));
+            const maxWidth = window.innerWidth * 0.5;
+            setImagePanelWidth(Math.min(Math.max(newWidth, minWidth), maxWidth));
         };
 
         const handleMouseUp = () => {
-            setIsResizing(false);
+            setIsResizingImage(false);
         };
 
-        if (isResizing) {
+        if (isResizingImage) {
             document.addEventListener('mousemove', handleMouseMove);
             document.addEventListener('mouseup', handleMouseUp);
             document.body.style.cursor = 'col-resize';
@@ -76,7 +78,38 @@ function App() {
             document.body.style.cursor = '';
             document.body.style.userSelect = '';
         };
-    }, [isResizing]);
+    }, [isResizingImage, entitiesPanelWidth]);
+
+    // Handle mouse move for resizing entities panel
+    useEffect(() => {
+        const handleMouseMove = (e) => {
+            if (!isResizingEntities) return;
+
+            const newWidth = window.innerWidth - e.clientX;
+            // Constrain between 250px and 400px
+            const minWidth = 250;
+            const maxWidth = 400;
+            setEntitiesPanelWidth(Math.min(Math.max(newWidth, minWidth), maxWidth));
+        };
+
+        const handleMouseUp = () => {
+            setIsResizingEntities(false);
+        };
+
+        if (isResizingEntities) {
+            document.addEventListener('mousemove', handleMouseMove);
+            document.addEventListener('mouseup', handleMouseUp);
+            document.body.style.cursor = 'col-resize';
+            document.body.style.userSelect = 'none';
+        }
+
+        return () => {
+            document.removeEventListener('mousemove', handleMouseMove);
+            document.removeEventListener('mouseup', handleMouseUp);
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
+        };
+    }, [isResizingEntities]);
 
     // Poll for output when connected
     useEffect(() => {
@@ -408,127 +441,128 @@ function App() {
 
                 <div
                     className="resize-handle"
-                    onMouseDown={() => setIsResizing(true)}
+                    onMouseDown={() => setIsResizingImage(true)}
                 />
 
-                <div className="sidebar" style={{ width: `${sidebarWidth}px` }}>
-                    <div className="panel">
-                        <h3>🏠 Room View</h3>
-                        <div className="room-info">
-                            {currentRoom.name && (
-                                <div className="room-name">
-                                    <strong>{currentRoom.name}</strong>
-                                </div>
-                            )}
-                            <div className="image-container">
-                                {roomImage ? (
-                                    <img
-                                        src={roomImage}
-                                        alt="Generated room view"
-                                        className="room-image"
-                                    />
-                                ) : (
-                                    <div className="image-placeholder">
-                                        <p>{currentRoom.name ? 'No image yet - click Generate to create one' : 'Explore a room to see images'}</p>
-                                    </div>
-                                )}
+                <div className="image-panel" style={{ width: `${imagePanelWidth}px` }}>
+                    <h3>🏠 Room View</h3>
+                    {currentRoom.name && (
+                        <div className="room-name">
+                            <strong>{currentRoom.name}</strong>
+                        </div>
+                    )}
+                    <div className="image-container">
+                        {roomImage ? (
+                            <img
+                                src={roomImage}
+                                alt="Generated room view"
+                                className="room-image"
+                            />
+                        ) : (
+                            <div className="image-placeholder">
+                                <p>{currentRoom.name ? 'No image yet - click Generate to create one' : 'Explore a room to see images'}</p>
                             </div>
-                            <div className="image-controls">
-                                {roomImage ? (
-                                    // Split button for regeneration
-                                    <>
-                                        <div className="btn-split-group">
-                                            <button
-                                                onClick={handleGenerateImage}
-                                                disabled={!sdAvailable || !currentRoom.name || generatingImage}
-                                                className="btn-split-main"
-                                            >
-                                                {generatingImage ? '🎨 Generating...' : '🔄 Regenerate'}
-                                            </button>
-                                            <button
-                                                onClick={togglePromptInput}
-                                                disabled={!sdAvailable || !currentRoom.name || generatingImage}
-                                                className="btn-split-dropdown"
-                                                title="Custom prompt options"
-                                            >
-                                                ▼
-                                            </button>
-                                        </div>
-
-                                        {showPromptInput && (
-                                            <div className="custom-prompt-section">
-                                                <label className="custom-prompt-label">
-                                                    Custom instructions:
-                                                </label>
-                                                <textarea
-                                                    className="custom-prompt-textarea"
-                                                    value={customPrompt}
-                                                    onChange={(e) => setCustomPrompt(e.target.value)}
-                                                    disabled={generatingImage}
-                                                    placeholder="e.g., darker, more fog, torchlight..."
-                                                    rows={3}
-                                                />
-                                                <button
-                                                    onClick={handleGenerateWithCustomPrompt}
-                                                    disabled={!sdAvailable || !currentRoom.name || generatingImage || !customPrompt.trim()}
-                                                    className="btn-generate-custom"
-                                                >
-                                                    {generatingImage ? '🎨 Generating...' : '✨ Generate with Custom Prompt'}
-                                                </button>
-                                            </div>
-                                        )}
-                                    </>
-                                ) : (
-                                    // Simple generate button when no image
+                        )}
+                    </div>
+                    <div className="image-controls">
+                        {roomImage ? (
+                            // Split button for regeneration
+                            <>
+                                <div className="btn-split-group">
                                     <button
                                         onClick={handleGenerateImage}
                                         disabled={!sdAvailable || !currentRoom.name || generatingImage}
-                                        className="btn-generate"
+                                        className="btn-split-main"
                                     >
-                                        {generatingImage ? '🎨 Generating...' : '🎨 Generate Image'}
+                                        {generatingImage ? '🎨 Generating...' : '🔄 Regenerate'}
                                     </button>
-                                )}
-                                <div className="sd-status">
-                                    SD: <span className={sdAvailable ? 'status-ok' : 'status-error'}>
-                                        {sdAvailable ? '✅ Ready' : '❌ Not Available'}
-                                    </span>
+                                    <button
+                                        onClick={togglePromptInput}
+                                        disabled={!sdAvailable || !currentRoom.name || generatingImage}
+                                        className="btn-split-dropdown"
+                                        title="Custom prompt options"
+                                    >
+                                        ▼
+                                    </button>
                                 </div>
-                            </div>
+
+                                {showPromptInput && (
+                                    <div className="custom-prompt-section">
+                                        <label className="custom-prompt-label">
+                                            Custom instructions:
+                                        </label>
+                                        <textarea
+                                            className="custom-prompt-textarea"
+                                            value={customPrompt}
+                                            onChange={(e) => setCustomPrompt(e.target.value)}
+                                            disabled={generatingImage}
+                                            placeholder="e.g., darker, more fog, torchlight..."
+                                            rows={3}
+                                        />
+                                        <button
+                                            onClick={handleGenerateWithCustomPrompt}
+                                            disabled={!sdAvailable || !currentRoom.name || generatingImage || !customPrompt.trim()}
+                                            className="btn-generate-custom"
+                                        >
+                                            {generatingImage ? '🎨 Generating...' : '✨ Generate with Custom Prompt'}
+                                        </button>
+                                    </div>
+                                )}
+                            </>
+                        ) : (
+                            // Simple generate button when no image
+                            <button
+                                onClick={handleGenerateImage}
+                                disabled={!sdAvailable || !currentRoom.name || generatingImage}
+                                className="btn-generate"
+                            >
+                                {generatingImage ? '🎨 Generating...' : '🎨 Generate Image'}
+                            </button>
+                        )}
+                        <div className="sd-status">
+                            SD: <span className={sdAvailable ? 'status-ok' : 'status-error'}>
+                                {sdAvailable ? '✅ Ready' : '❌ Not Available'}
+                            </span>
                         </div>
                     </div>
+                </div>
 
-                    <div className="panel">
-                        <h3>📦 Items & Mobs</h3>
-                        <div className="entity-list">
-                            {entities.mobs && entities.mobs.length > 0 && (
-                                <div className="entity-section">
-                                    <h4 className="entity-section-title">👥 NPCs/Mobs:</h4>
-                                    <ul className="entity-items">
-                                        {entities.mobs.map((mob, index) => (
-                                            <li key={`mob-${index}`} className="entity-item mob">
-                                                {mob}
-                                            </li>
-                                        ))}
-                                    </ul>
-                                </div>
-                            )}
-                            {entities.items && entities.items.length > 0 && (
-                                <div className="entity-section">
-                                    <h4 className="entity-section-title">📦 Items:</h4>
-                                    <ul className="entity-items">
-                                        {entities.items.map((item, index) => (
-                                            <li key={`item-${index}`} className="entity-item item">
-                                                {item}
-                                            </li>
-                                        ))}
-                                    </ul>
-                                </div>
-                            )}
-                            {(!entities.mobs || entities.mobs.length === 0) &&
-                             (!entities.items || entities.items.length === 0) && (
-                                <p className="no-entities">No items or mobs detected</p>
-                            )}
-                        </div>
+                <div
+                    className="resize-handle"
+                    onMouseDown={() => setIsResizingEntities(true)}
+                />
+
+                <div className="entities-panel" style={{ width: `${entitiesPanelWidth}px` }}>
+                    <h3>📦 Items & Mobs</h3>
+                    <div className="entity-list">
+                        {entities.mobs && entities.mobs.length > 0 && (
+                            <div className="entity-section">
+                                <h4 className="entity-section-title">👥 NPCs/Mobs:</h4>
+                                <ul className="entity-items">
+                                    {entities.mobs.map((mob, index) => (
+                                        <li key={`mob-${index}`} className="entity-item mob">
+                                            {mob}
+                                        </li>
+                                    ))}
+                                </ul>
+                            </div>
+                        )}
+                        {entities.items && entities.items.length > 0 && (
+                            <div className="entity-section">
+                                <h4 className="entity-section-title">📦 Items:</h4>
+                                <ul className="entity-items">
+                                    {entities.items.map((item, index) => (
+                                        <li key={`item-${index}`} className="entity-item item">
+                                            {item}
+                                        </li>
+                                    ))}
+                                </ul>
+                            </div>
+                        )}
+                        {(!entities.mobs || entities.mobs.length === 0) &&
+                         (!entities.items || entities.items.length === 0) && (
+                            <p className="no-entities">No items or mobs detected</p>
+                        )}
                     </div>
                 </div>
             </div>
