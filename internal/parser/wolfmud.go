@@ -11,6 +11,7 @@ type WolfMUDParser struct {
 	promptRegex    *regexp.Regexp
 	exitRegex      *regexp.Regexp
 	inventoryRegex *regexp.Regexp
+	entityRegex    *regexp.Regexp // For "You see X here." pattern
 	colorCodeRegex *regexp.Regexp
 }
 
@@ -49,6 +50,7 @@ func NewWolfMUDParser() *WolfMUDParser {
 		promptRegex:    regexp.MustCompile(`^[\[<].*[\]>]\s*$`),
 		exitRegex:      regexp.MustCompile(`^(?:You see )?[Ee]xits?:\s*(.+)$`),
 		inventoryRegex: regexp.MustCompile(`^(A|An|The)\s+.*\s+(is|are|sits?|lies?|stands?|rests?)\s+.*\.$`),
+		entityRegex:    regexp.MustCompile(`^You see\s+(.+?)\s+here\.$`),
 		colorCodeRegex: regexp.MustCompile(`\x1b\[[0-9;]*m`),
 	}
 }
@@ -102,7 +104,24 @@ func (p *WolfMUDParser) ParseLine(line string) *ParsedOutput {
 		return output
 	}
 
-	// Check for inventory items (things in the room)
+	// Check for entities (items/mobs) with "You see X here." pattern
+	if matches := p.entityRegex.FindStringSubmatch(cleaned); matches != nil {
+		entityName := matches[1]
+
+		// Determine if it's likely a mob (NPC) or item based on name
+		// Mobs typically have proper names or titles, items have articles
+		if p.isLikelyMob(entityName) {
+			output.Type = TypeMobs
+			output.Mobs = []string{entityName}
+		} else {
+			output.Type = TypeInventory
+			output.Items = []string{entityName}
+		}
+		output.Content = cleaned
+		return output
+	}
+
+	// Check for inventory items (things in the room) - legacy pattern
 	if p.inventoryRegex.MatchString(cleaned) {
 		output.Type = TypeInventory
 		output.Content = cleaned
@@ -257,7 +276,6 @@ func (p *WolfMUDParser) isSystemMessage(line string) bool {
 		"You aren't",
 		"You are",
 		"You have",
-		"You see",
 		"There is",
 		"There are",
 		"It is",
@@ -272,5 +290,41 @@ func (p *WolfMUDParser) isSystemMessage(line string) bool {
 		}
 	}
 
+	return false
+}
+
+// isLikelyMob determines if an entity name is likely a mob/NPC vs an item
+func (p *WolfMUDParser) isLikelyMob(name string) bool {
+	nameLower := strings.ToLower(name)
+
+	// Items typically start with articles
+	if strings.HasPrefix(nameLower, "a ") ||
+	   strings.HasPrefix(nameLower, "an ") ||
+	   strings.HasPrefix(nameLower, "the ") ||
+	   strings.HasPrefix(nameLower, "some ") {
+		return false
+	}
+
+	// Mobs often have titles or are proper names without articles
+	// Common NPC/mob indicators
+	mobIndicators := []string{
+		"guard", "warden", "keeper", "vendor", "trader",
+		"baker", "smith", "merchant", "clerk", "priest",
+		"warrior", "mage", "cleric", "rogue", "fighter",
+		"captain", "sergeant", "lieutenant",
+	}
+
+	for _, indicator := range mobIndicators {
+		if strings.Contains(nameLower, indicator) {
+			return true
+		}
+	}
+
+	// If it starts with a capital letter and no article, likely a proper name (mob)
+	if len(name) > 0 && name[0] >= 'A' && name[0] <= 'Z' {
+		return true
+	}
+
+	// Default to item
 	return false
 }

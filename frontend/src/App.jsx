@@ -11,6 +11,7 @@ import {
     RegenerateRoomImage,
     RegenerateRoomImageWithPrompt,
     GetCurrentRoom,
+    GetCurrentEntities,
     GetRoomImage,
     CheckSDStatus
 } from "../wailsjs/go/main/App";
@@ -30,6 +31,7 @@ function App() {
     const [isResizing, setIsResizing] = useState(false);
     const [showPromptInput, setShowPromptInput] = useState(false);
     const [customPrompt, setCustomPrompt] = useState('');
+    const [entities, setEntities] = useState({ items: [], mobs: [] });
 
     const outputEndRef = useRef(null);
     const inputRef = useRef(null);
@@ -98,6 +100,12 @@ function App() {
                         }
                         return room;
                     });
+                }
+
+                // Check for entity updates
+                const entitiesData = await GetCurrentEntities();
+                if (entitiesData) {
+                    setEntities(entitiesData);
                 }
             } catch (err) {
                 console.error("Error getting output:", err);
@@ -492,7 +500,34 @@ function App() {
                     <div className="panel">
                         <h3>📦 Items & Mobs</h3>
                         <div className="entity-list">
-                            <p>Detected entities will appear here</p>
+                            {entities.mobs && entities.mobs.length > 0 && (
+                                <div className="entity-section">
+                                    <h4 className="entity-section-title">👥 NPCs/Mobs:</h4>
+                                    <ul className="entity-items">
+                                        {entities.mobs.map((mob, index) => (
+                                            <li key={`mob-${index}`} className="entity-item mob">
+                                                {mob}
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </div>
+                            )}
+                            {entities.items && entities.items.length > 0 && (
+                                <div className="entity-section">
+                                    <h4 className="entity-section-title">📦 Items:</h4>
+                                    <ul className="entity-items">
+                                        {entities.items.map((item, index) => (
+                                            <li key={`item-${index}`} className="entity-item item">
+                                                {item}
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </div>
+                            )}
+                            {(!entities.mobs || entities.mobs.length === 0) &&
+                             (!entities.items || entities.items.length === 0) && (
+                                <p className="no-entities">No items or mobs detected</p>
+                            )}
                         </div>
                     </div>
                 </div>

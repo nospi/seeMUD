@@ -30,6 +30,9 @@ type App struct {
 	roomMux        sync.RWMutex
 	roomImageCache map[string]string // Map of room name to image file path
 	imageCacheMux  sync.RWMutex
+	currentItems   []string // Items in current room
+	currentMobs    []string // Mobs/NPCs in current room
+	entityMux      sync.RWMutex
 }
 
 const defaultSDEndpoint = "http://127.0.0.1:7860"
@@ -172,6 +175,13 @@ func (a *App) processOutput() {
 				a.roomMux.Lock()
 				a.currentRoom = parsed
 				a.roomMux.Unlock()
+
+				// Clear entities when entering new room
+				a.entityMux.Lock()
+				a.currentItems = []string{}
+				a.currentMobs = []string{}
+				a.entityMux.Unlock()
+
 				log.Printf("Room title detected: %s", parsed.RoomName)
 			} else if parsed.Type == parser.TypeRoomDescription {
 				a.roomMux.Lock()
@@ -181,6 +191,18 @@ func (a *App) processOutput() {
 					log.Printf("Room description added: %s", parsed.Content)
 				}
 				a.roomMux.Unlock()
+			} else if parsed.Type == parser.TypeInventory && len(parsed.Items) > 0 {
+				// Add items to current room inventory
+				a.entityMux.Lock()
+				a.currentItems = append(a.currentItems, parsed.Items...)
+				a.entityMux.Unlock()
+				log.Printf("Items detected: %v", parsed.Items)
+			} else if parsed.Type == parser.TypeMobs && len(parsed.Mobs) > 0 {
+				// Add mobs to current room
+				a.entityMux.Lock()
+				a.currentMobs = append(a.currentMobs, parsed.Mobs...)
+				a.entityMux.Unlock()
+				log.Printf("Mobs detected: %v", parsed.Mobs)
 			}
 		}
 	}
@@ -299,6 +321,17 @@ func (a *App) GetCurrentRoom() map[string]string {
 	return map[string]string{
 		"name":        a.currentRoom.RoomName,
 		"description": a.currentRoom.Content,
+	}
+}
+
+// GetCurrentEntities returns items and mobs in the current room
+func (a *App) GetCurrentEntities() map[string][]string {
+	a.entityMux.RLock()
+	defer a.entityMux.RUnlock()
+
+	return map[string][]string{
+		"items": a.currentItems,
+		"mobs":  a.currentMobs,
 	}
 }
 

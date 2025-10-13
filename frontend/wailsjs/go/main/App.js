@@ -22,6 +22,10 @@ export function GetConnectionStatus() {
   return window['go']['main']['App']['GetConnectionStatus']();
 }
 
+export function GetCurrentEntities() {
+  return window['go']['main']['App']['GetCurrentEntities']();
+}
+
 export function GetCurrentRoom() {
   return window['go']['main']['App']['GetCurrentRoom']();
 }

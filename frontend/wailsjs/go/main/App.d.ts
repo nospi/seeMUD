@@ -11,6 +11,8 @@ export function GenerateRoomImage():Promise<string>;
 
 export function GetConnectionStatus():Promise<boolean>;
 
+export function GetCurrentEntities():Promise<Record<string, Array<string>>>;
+
 export function GetCurrentRoom():Promise<Record<string, string>>;
 
 export function GetOutput():Promise<Array<string>>;
