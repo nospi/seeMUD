@@ -25,6 +25,8 @@ function App() {
     const [roomImage, setRoomImage] = useState(null);
     const [generatingImage, setGeneratingImage] = useState(false);
     const [sdAvailable, setSdAvailable] = useState(false);
+    const [sidebarWidth, setSidebarWidth] = useState(600); // Default to 600px
+    const [isResizing, setIsResizing] = useState(false);
 
     const outputEndRef = useRef(null);
     const inputRef = useRef(null);
@@ -39,6 +41,37 @@ function App() {
     useEffect(() => {
         inputRef.current?.focus();
     }, []);
+
+    // Handle mouse move for resizing
+    useEffect(() => {
+        const handleMouseMove = (e) => {
+            if (!isResizing) return;
+
+            const newWidth = window.innerWidth - e.clientX;
+            // Constrain between 300px and 80% of window width
+            const minWidth = 300;
+            const maxWidth = window.innerWidth * 0.8;
+            setSidebarWidth(Math.min(Math.max(newWidth, minWidth), maxWidth));
+        };
+
+        const handleMouseUp = () => {
+            setIsResizing(false);
+        };
+
+        if (isResizing) {
+            document.addEventListener('mousemove', handleMouseMove);
+            document.addEventListener('mouseup', handleMouseUp);
+            document.body.style.cursor = 'col-resize';
+            document.body.style.userSelect = 'none';
+        }
+
+        return () => {
+            document.removeEventListener('mousemove', handleMouseMove);
+            document.removeEventListener('mouseup', handleMouseUp);
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
+        };
+    }, [isResizing]);
 
     // Poll for output when connected
     useEffect(() => {
@@ -341,7 +374,12 @@ function App() {
                     </form>
                 </div>
 
-                <div className="sidebar">
+                <div
+                    className="resize-handle"
+                    onMouseDown={() => setIsResizing(true)}
+                />
+
+                <div className="sidebar" style={{ width: `${sidebarWidth}px` }}>
                     <div className="panel">
                         <h3>🏠 Room View</h3>
                         <div className="room-info">

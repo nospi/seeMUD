@@ -90,7 +90,7 @@ body {
     display: flex;
     flex-direction: column;
     background: #0f0f23;
-    border-right: 2px solid #16213e;
+    min-width: 400px;
 }
 
 .terminal-output {
@@ -156,15 +156,43 @@ body {
     color: #666;
 }
 
+/* Resize Handle */
+.resize-handle {
+    width: 8px;
+    background: #16213e;
+    cursor: col-resize;
+    flex-shrink: 0;
+    transition: background 0.2s;
+    position: relative;
+}
+
+.resize-handle:hover {
+    background: #e94560;
+}
+
+.resize-handle::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 2px;
+    height: 40px;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 1px;
+}
+
 /* Sidebar */
 .sidebar {
-    width: 400px;
     display: flex;
     flex-direction: column;
     gap: 1rem;
     padding: 1rem;
     background: #16213e;
     overflow-y: auto;
+    flex-shrink: 0;
+    min-width: 300px;
+    max-width: 80vw;
 }
 
 .panel {
@@ -180,7 +208,7 @@ body {
 }
 
 .image-placeholder {
-    height: 300px;
+    min-height: 400px;
     background: #1a1a2e;
     border-radius: 4px;
     display: flex;
@@ -264,7 +292,7 @@ body {
 
 .image-container {
     position: relative;
-    min-height: 300px;
+    min-height: 400px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -272,7 +300,9 @@ body {
 
 .room-image {
     max-width: 100%;
-    max-height: 300px;
+    max-height: 500px;
+    width: auto;
+    height: auto;
     border-radius: 8px;
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
 }
